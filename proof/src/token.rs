@@ -1,4 +1,8 @@
 
+#[allow(unused_variables)]
+pub mod prelude {
+    pub use super::{Token, TokenType,};
+}
 use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
 use std::fmt::Formatter;
@@ -6,12 +10,14 @@ use std::fmt;
 
 // End of file 
 pub const EOF: char = '\0';
+#[allow(dead_code)]
+#[allow(unused_variables)]
 
-
-pub trait ToToken {
-    // returns token
-    fn token(&self) -> Token;
+trait ToToken<'a> {
+    fn token(&'a self) -> &'a Token<'a>;
 }
+
+
 
 
 
@@ -26,6 +32,9 @@ pub enum TokenType {
     Implies,// →
     And,    // ∧
     Or,     // ∨
+    Plus,
+    Minus,
+    Star,
     Not,    // ¬ or !
     Equal,  // =
     Colon,  // :
@@ -45,9 +54,9 @@ pub enum TokenType {
     StringLiteral(String),
 }
 #[derive(Debug, Clone,Default)]
-pub struct Token {
+pub struct Token<'a>{
     pub kind: TokenType,
-    pub lexeme: Option<String>, // or Option<String> if not always needed
+    pub lexeme: Option<&'a str>,// or Option<String> if not always needed
     pub position: usize,
     pub source_id: usize,
 }
@@ -58,27 +67,27 @@ impl Default for TokenType {
 }
 
 
-impl PartialEq for Token {
+impl <'a> PartialEq for Token<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.kind == other.kind && self.lexeme == other.lexeme
     }
 }
 
-impl Eq for Token {}
+impl <'a> Eq for Token <'a>{}
 
-impl PartialOrd for Token {
+impl <'a> PartialOrd for Token<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Token {
+impl <'a> Ord for Token<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.kind.cmp(&other.kind).then_with(|| self.lexeme.cmp(&other.lexeme))
     }
 }
 
-impl Hash for Token {
+impl <'a> Hash for Token <'a>{
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.kind.hash(state);
         self.lexeme.hash(state);
@@ -86,7 +95,7 @@ impl Hash for Token {
 }
 
 
-impl Display for Token {
+impl<'a>Display for Token <'a>{
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.kind)?;
 
@@ -98,7 +107,10 @@ impl Display for Token {
     }
 }
 
-impl Token {
+#[allow(dead_code)]
+#[allow(unused_variables)]
+
+impl  <'a> Token <'a>{
     pub fn new(kind: TokenType) -> Self {
         Token {
             kind,
@@ -107,19 +119,19 @@ impl Token {
             source_id: 0,
         }
     }
-
-    pub fn with_lexeme<S: Into<String>>(kind: TokenType, lexeme: S) -> Self {
+    #[inline]
+    pub fn with_lexeme(kind: TokenType, lexeme: &'a str) -> Self {
         Self {
             kind,
-            lexeme: Some(lexeme.into()),
+            lexeme: Some(lexeme),
             position: 0,
             source_id: 0,
         }
-
     }
-
-    pub fn lexeme(&self) -> String {
-        self.lexeme.as_deref().unwrap_or("?").to_string()
+    #[inline]
+    pub fn lexeme(&self) -> &str {
+        self.lexeme.unwrap_or("?")
     }
 
 }
+

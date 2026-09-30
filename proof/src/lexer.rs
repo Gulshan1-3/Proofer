@@ -5,73 +5,11 @@ pub mod prelude {
 }
 
 use crate::{
+    syntax::span::{FileId, Span},
     token::{Token, TokenType, EOF},
 };
-use TokenType::*;
 use std::{iter::Peekable, str::Chars};
-
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-#[allow(unused_variables)]
-pub struct SourceFile {
-    pub id: usize,
-    pub filename: String,
-    pub content: String,
-}
-#[allow(dead_code)]
-#[allow(unused_variables)]
-impl SourceFile {
-    pub fn new<S: Into<String>>(id: usize, filename: S, content: S) -> Self {
-        Self {
-            id,
-            filename: filename.into(),
-            content: content.into(),
-        }
-    }
-
-    
-    pub fn len(&self) -> usize {
-        self.content.len()
-    }
-
-   
-    pub fn char_at(&self, pos: usize) -> char {
-        self.content.chars().nth(pos).unwrap_or('\0')
-    }
-
-    /// Slice a range from the source
-    pub fn slice(&self, start: usize, end: usize) -> &str {
-        &self.content[start..end]
-    }
-
-    pub fn position_to_line_col(&self, pos: usize) -> (usize, usize) {
-        let mut line = 1;
-        let mut col = 1;
-        let mut current_pos = 0;
-
-        for ch in self.content.chars() {
-            if current_pos == pos {
-                break;
-            }
-
-            if ch == '\n' {
-                line += 1;
-                col = 1;
-            } else {
-                col += 1;
-            }
-
-         
-            current_pos += ch.len_utf8();
-        }
-
-        (line, col)
-    }
-}
-
-#[allow(dead_code)]
-#[allow(unused_variables)]
+use TokenType::*;
 
 pub struct Lexer<'a> {
     pub chars: Peekable<Chars<'a>>,
@@ -79,62 +17,95 @@ pub struct Lexer<'a> {
     pos: usize,
     peeked: Option<Token<'a>>,
     current: Option<Token<'a>>,
-    current_len: u32,
+    file_id: FileId,
 }
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
 impl<'a> Lexer<'a> {
-    pub fn new(s: &str) -> Lexer<'_> {
+    pub fn new(s: &'a str) -> Lexer<'a> {
+        Self::new_with_file(s, FileId(0))
+    }
+
+    pub fn new_with_file(s: &'a str, file_id: FileId) -> Lexer<'a> {
         Lexer {
             chars: s.chars().peekable(),
             text: s.as_bytes(),
             pos: 0,
             peeked: None,
             current: None,
-            current_len: 0,
+            file_id,
         }
     }
 
-    pub fn current_token(&self) -> Option<&Token> {
+    pub fn current_token(&self) -> Option<&Token<'_>> {
         self.current.as_ref()
     }
 
-    pub fn slice(&mut self) -> &'a [u8] {
-        &self.text[(self.pos - self.current_len as usize)..(self.pos)]
-    }
     pub fn next_token(&mut self) -> Option<Token<'a>> {
-       
+        if let Some(peeked) = self.peeked.take() {
+            self.current = Some(peeked.clone());
+            return Some(peeked);
+        }
+
+        // Skip whitespace and comments before starting token
+        loop {
+            while let Some(c) = self.chars.peek() {
+                if c.is_whitespace() {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+
+            // Check for line comments: //
+            if let Some(&'/') = self.chars.peek() {
+                let mut clone = self.chars.clone();
+                clone.next();
+                if let Some(&'/') = clone.peek() {
+                    // Skip until newline
+                    self.advance(); // consume first '/'
+                    self.advance(); // consume second '/'
+                    while let Some(c) = self.advance() {
+                        if c == '\n' {
+                            break;
+                        }
+                    }
+                    continue;
+                }
+            }
+            break;
+        }
 
         let start_pos = self.pos;
-
-
-        let ch = self.advance()?;
-
-        let token_type = match ch {
-            c if c.is_whitespace() => {
-                self.consume_whitespace();
-                return self.next_token(); // skip and continue
+        let ch = match self.advance() {
+            Some(c) => c,
+            None => {
+                // End of input — produce the Eof token
+                let span = Span::new(self.file_id, start_pos as u32, start_pos as u32);
+                let tok = Token {
+                    kind: Eof,
+                    lexeme: None,
+                    position: start_pos,
+                    source_id: self.file_id.0 as usize,
+                    span,
+                };
+                self.current = Some(tok.clone());
+                return Some(tok);
             }
-        
-            c if Self::is_ident_part(c) => {
+        };
+
+        let (token_type, end_pos, lexeme) = match ch {
+            c if Self::is_ident_start(c) => {
                 let kind = self.consume_identifier_or_keyword(c);
-                return Some(Token {
-                    kind,
-                    lexeme: None, // optionally Some(...) if you're tracking slices
-                    position: self.pos,
-                    source_id: 0,
-                });
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (kind, end, Some(lexeme_str))
             }
-        
+
             c @ '0'..='9' => {
                 let kind = self.consume_number(c);
-                return Some(Token {
-                    kind,
-                    lexeme: None,
-                    position: self.pos,
-                    source_id: 0,
-                });
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (kind, end, Some(lexeme_str))
             }
 
             '"' => {
@@ -145,54 +116,160 @@ impl<'a> Lexer<'a> {
                     }
                     string.push(nc);
                 }
-                StringLiteral(string)
+                let end = self.pos;
+                (StringLiteral(string), end, None)
             }
 
             ':' => {
-                if self.peek_char() == Some(&'=') {
+                let kind = if self.peek_char() == Some(&'=') {
                     self.advance();
                     ColonEqual
                 } else {
                     Colon
-                }
+                };
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (kind, end, Some(lexeme_str))
             }
 
-            '=' => Equal,
-            '+' => Plus,
-            '-' => Minus,
-            '*' => Star,
-            '.' => Dot,
-            ',' => Comma,
-            '(' => LParen,
-            ')' => RParen,
-            '¬' | '!' => Not,
-            '∧' => And,
-            '∨' => Or,
-            '→' => Implies,
-            '∀' => ForAll,
-            '∃' => Exists,
-            EOF => Eof,
-            _ => Unknown,
+            '=' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Equal, end, Some(lexeme_str))
+            }
+
+            '+' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Plus, end, Some(lexeme_str))
+            }
+
+            '-' => {
+                let kind = if self.peek_char() == Some(&'>') {
+                    self.advance();
+                    Implies
+                } else {
+                    Minus
+                };
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (kind, end, Some(lexeme_str))
+            }
+
+            '<' => {
+                let kind = if self.peek_char() == Some(&'-') {
+                    let mut clone = self.chars.clone();
+                    clone.next();
+                    if clone.peek() == Some(&'>') {
+                        self.advance(); // consume '-'
+                        self.advance(); // consume '>'
+                        Iff
+                    } else {
+                        Unknown
+                    }
+                } else {
+                    Unknown
+                };
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (kind, end, Some(lexeme_str))
+            }
+
+            '*' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Star, end, Some(lexeme_str))
+            }
+
+            '.' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Dot, end, Some(lexeme_str))
+            }
+
+            ',' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Comma, end, Some(lexeme_str))
+            }
+
+            '(' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (LParen, end, Some(lexeme_str))
+            }
+
+            ')' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (RParen, end, Some(lexeme_str))
+            }
+
+            '¬' | '!' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Not, end, Some(lexeme_str))
+            }
+
+            '∧' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (And, end, Some(lexeme_str))
+            }
+
+            '∨' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Or, end, Some(lexeme_str))
+            }
+
+            '→' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Implies, end, Some(lexeme_str))
+            }
+
+            '↔' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Iff, end, Some(lexeme_str))
+            }
+
+            '∀' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (ForAll, end, Some(lexeme_str))
+            }
+
+            '∃' => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Exists, end, Some(lexeme_str))
+            }
+
+            EOF => (Eof, self.pos, None),
+
+            _ => {
+                let end = self.pos;
+                let lexeme_str = std::str::from_utf8(&self.text[start_pos..end]).unwrap();
+                (Unknown, end, Some(lexeme_str))
+            }
         };
 
-        let end_pos = self.pos;
-        self.current_len = (end_pos - start_pos) as u32;
-        let lexeme_bytes = &self.text[start_pos..end_pos];
-        let lexeme = std::str::from_utf8(lexeme_bytes).unwrap();
-
-
+        let span = Span::new(self.file_id, start_pos as u32, end_pos as u32);
         let tok = Token {
             kind: token_type,
-            lexeme:Some(lexeme),
+            lexeme,
             position: start_pos,
-            source_id:0,
+            source_id: self.file_id.0 as usize,
+            span,
         };
 
         self.current = Some(tok.clone());
         Some(tok)
     }
 
-    pub fn peek_token(&mut self) -> Option<&Token> {
+    pub fn peek_token(&mut self) -> Option<&Token<'a>> {
         if self.peeked.is_none() {
             self.peeked = self.next_token();
         }
@@ -201,7 +278,7 @@ impl<'a> Lexer<'a> {
 
     fn advance(&mut self) -> Option<char> {
         let c = self.chars.next()?;
-        self.pos += c.len_utf8();  // Correctly update byte position
+        self.pos += c.len_utf8();
         Some(c)
     }
 
@@ -209,21 +286,12 @@ impl<'a> Lexer<'a> {
     fn peek_char(&mut self) -> Option<&char> {
         self.chars.peek()
     }
+
     #[inline]
-    fn issymbol(c: char) -> bool {
-        "+-*/=<>^&|".contains(c)
-    }
-    #[inline]
-    fn consume_whitespace(&mut self) {
-        while self.peek_char().map_or(false, |c| c.is_whitespace()) {
-            self.advance();
-        }
-    }
-#[inline]
     fn consume_identifier_or_keyword(&mut self, first_char: char) -> TokenType {
         let mut ident = String::new();
         ident.push(first_char);
-    
+
         while let Some(nc) = self.peek_char() {
             if Self::is_ident_part(*nc) {
                 ident.push(self.advance().unwrap());
@@ -231,18 +299,41 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-    
-        let kind = match ident.as_str() {
+
+        match ident.as_str() {
             "theorem" => TokenType::Theorem,
-            "proof"   => TokenType::Proof,
-            _         => TokenType::Ident(ident),
-        };
-        kind
+            "proof" => TokenType::Proof,
+            "end" => TokenType::End,
+            "take" => TokenType::Take,
+            "suppose" => TokenType::Suppose,
+            "let" => TokenType::Let,
+            "have" => TokenType::Have,
+            "construct" => TokenType::Construct,
+            "show" => TokenType::Show,
+            "derive" => TokenType::Derive,
+            "use" => TokenType::Use,
+            "therefore" => TokenType::Therefore,
+            "choose" => TokenType::Choose,
+            "cases" => TokenType::Cases,
+            "contradict" => TokenType::Contradict,
+            "figure" => TokenType::Figure,
+            "given" => TokenType::Given,
+            "from" => TokenType::From,
+            "as" => TokenType::As,
+            "using" => TokenType::Using,
+            "forall" => TokenType::ForAll,
+            "exists" => TokenType::Exists,
+            "and" => TokenType::And,
+            "or" => TokenType::Or,
+            "not" => TokenType::Not,
+            _ => TokenType::Ident(ident),
+        }
     }
+
     #[inline]
     fn consume_number(&mut self, first_char: char) -> TokenType {
         let mut number = first_char.to_string();
-    
+
         while let Some(nc) = self.peek_char() {
             if nc.is_ascii_digit() {
                 number.push(self.advance().unwrap());
@@ -250,12 +341,18 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-    
+
         TokenType::Number(number.parse().unwrap_or(0))
     }
+
     #[inline]
-    fn is_ident_part(c: char) -> bool {
+    fn is_ident_start(c: char) -> bool {
         c.is_alphabetic() || c == '_'
     }
-    
+
+    #[inline]
+    fn is_ident_part(c: char) -> bool {
+        c.is_alphanumeric() || c == '_'
+    }
 }
+

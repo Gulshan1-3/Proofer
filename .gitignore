@@ -1,0 +1,20 @@
+# Build and compilation outputs
+target/
+**/target/
+
+# Documentation
+docs/
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files and logs
+*.log
+*.tmp
+node_modules/
+dist/

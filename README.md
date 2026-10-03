@@ -305,7 +305,7 @@ When an invalid proof is evaluated, the kernel returns:
 
 ## 6. Local Installation and Running Guide
 
-Proofer is designed as a **local-first workstation** and does not require cloud hosting. You can run it via the **Command Line Interface (CLI)**, the **Interactive Web Workstation**, or inside **VS Code**.
+Proofer is designed as a **local-first workstation** and does not require cloud hosting. You can run it as a **Native Desktop App (Tauri)**, an **Interactive Web Workstation**, inside **VS Code**, or via the **Command Line Interface (CLI)**.
 
 ### Prerequisites
 
@@ -320,13 +320,35 @@ Ensure you have the following installed on your machine:
   node -v
   npm -v
   ```
+- **Linux GUI Libraries** (for native desktop app windowing):
+  - Ubuntu/Debian: `sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libsoup2.4-dev`
+  - Fedora/RHEL: `sudo dnf install webkit2gtk3-devel gtk3-devel libsoup-devel`
 - *(Optional)* **VS Code** for the native theorem proving extension.
 
 ---
 
-### Method A: Interactive Web Workstation (Recommended)
+### Method A: Native Desktop Application (Tauri — Recommended)
 
-The Web Workstation provides the 3-pane interactive environment with synchronous geometry visualization, step inspector, parametric deformation, and AI co-prover infilling.
+Run Proofer as a standalone desktop program without any web browser, localhost port, or VS Code needed:
+
+```bash
+cd frontend
+npm install
+npm run tauri:dev
+```
+> This opens a dedicated native desktop window (`1440x900`) with direct in-process IPC to the Rust verification kernel (0ms latency, zero HTTP overhead).
+
+To compile a standalone release executable:
+```bash
+cd frontend
+npm run tauri:build
+```
+
+---
+
+### Method B: Interactive Web Workstation
+
+If you prefer running inside your web browser (Chrome, Firefox, Edge):
 
 #### 1. Start the Rust Verification Daemon
 In your first terminal, start the kernel daemon on port 8086:
@@ -337,7 +359,7 @@ cargo run --release -- --server
 > The daemon will start listening on `http://127.0.0.1:8086`.
 
 #### 2. Start the Frontend Dev Server
-In a second terminal, install dependencies and launch Vite:
+In a second terminal, launch Vite:
 ```bash
 cd frontend
 npm install
@@ -349,11 +371,10 @@ Open your browser to:
 ```
 http://localhost:5173
 ```
-*Tip: Any edit in the editor will be verified by the local Rust daemon with sub-millisecond latency.*
 
 ---
 
-### Method B: Native VS Code Extension
+### Method C: Native VS Code Extension
 
 For an integrated theorem-proving experience directly inside VS Code:
 
@@ -361,11 +382,10 @@ For an integrated theorem-proving experience directly inside VS Code:
    ```bash
    cd vscode-extension
    npm install
-   npm run compile
+   npm run build
    npx @vscode/vsce package
    code --install-extension proofer-vscode-0.1.0.vsix
    ```
-   *(Or install the pre-packaged `proofer-vscode-0.1.0.vsix` directly from the project root).*
 
 2. **Start the verification daemon**:
    ```bash
@@ -374,12 +394,12 @@ For an integrated theorem-proving experience directly inside VS Code:
 
 3. **Open any `.proof` file**:
    Open files such as `mathlib/triangles.proof`. Use:
-   - `Proofer: Open Interactive Workstation` from the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
-   - `✨ Infill Step (Co-Prover)` to synthesize deductions with kernel guardrails.
+   - `Proofer: Open Workstation Panel` from the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
+   - `Infill Step (Co-Prover)` to synthesize deductions with kernel guardrails.
 
 ---
 
-### Method C: Command-Line Interface (CLI)
+### Method D: Command-Line Interface (CLI)
 
 You can build and install the `proof` binary directly to your PATH:
 

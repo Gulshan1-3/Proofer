@@ -12,6 +12,17 @@ const getApiUrl = () => {
 };
 
 export async function verifyProofCode(code: string): Promise<VerificationResponse> {
+  // 0. If running inside Tauri Native Desktop App, invoke Rust kernel via 0ms IPC
+  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    try {
+      const invoke = (window as any).__TAURI__.invoke;
+      const rawJson = await invoke('verify_proof', { code });
+      return JSON.parse(rawJson) as VerificationResponse;
+    } catch (_err) {
+      // Fall through to WASM or HTTP
+    }
+  }
+
   // 1. Try In-Browser WebAssembly Kernel (0ms network latency, 100% offline)
   if (isWasmReady()) {
     const wasmRes = verifyProofWasm(code);
@@ -62,6 +73,17 @@ export interface SynthesizedStepResult {
 }
 
 export async function synthesizeProofStep(code: string): Promise<SynthesizedStepResult> {
+  // 0. If running inside Tauri Native Desktop App, invoke Rust kernel via 0ms IPC
+  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    try {
+      const invoke = (window as any).__TAURI__.invoke;
+      const rawJson = await invoke('synthesize_step', { code });
+      return JSON.parse(rawJson) as SynthesizedStepResult;
+    } catch (_err) {
+      // Fall through to HTTP daemon
+    }
+  }
+
   // 1. Try Rust backend HTTP daemon
   try {
     const res = await fetch(`${getApiUrl()}/api/synthesize`, {

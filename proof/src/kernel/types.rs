@@ -3,7 +3,6 @@
 //! These types are intentionally independent of the parser, AST, and HIR.
 //! The kernel must never depend on untrusted representations.
 
-use crate::id::FactId;
 use std::fmt;
 
 /// A kernel-level term (first-order).

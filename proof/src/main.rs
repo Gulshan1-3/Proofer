@@ -1,184 +1,68 @@
-use proof::parser::Parser;
-use proof::hir::resolve::Resolver;
-use proof::elab::Elaborator;
-use proof::ast::{Item, ProofStepKind};
-use std::io::{Read, Write};
+use proof::api::process_proof_request;
+use proof::incremental::IncrementalEngine;
+use std::io::{Read, Write, BufRead, BufReader};
 use std::net::{TcpListener, TcpStream};
-use std::collections::HashMap;
-
-/// Helper to serialize a string for JSON
-fn json_str(s: &str) -> String {
-    format!("\"{}\"", s.replace('\\', "\\\\").replace('\"', "\\\"").replace('\n', "\\n"))
-}
-
-/// Verification payload returned to the frontend according to enterprise editor specification.
-fn process_proof_request(code: &str) -> String {
-    let mut parser = Parser::new(code);
-    let file_ast = parser.parse_file();
-
-    let parser_errors: Vec<String> = parser.diagnostics().iter().map(|d| d.message.clone()).collect();
-    if !parser_errors.is_empty() {
-        let errs_json: Vec<String> = parser_errors.iter().map(|e| json_str(e)).collect();
-        return format!(
-            "{{\"status\": \"Error\", \"stage\": \"Parser\", \"errors\": [{}], \"verified\": false}}",
-            errs_json.join(", ")
-        );
-    }
-
-    let mut resolver = Resolver::new();
-    let pkg = resolver.resolve_file(&file_ast);
-    let resolver_errors: Vec<String> = resolver.diagnostics().iter().map(|d| d.message.clone()).collect();
-    if !resolver_errors.is_empty() {
-        let errs_json: Vec<String> = resolver_errors.iter().map(|e| json_str(e)).collect();
-        return format!(
-            "{{\"status\": \"Error\", \"stage\": \"Resolver\", \"errors\": [{}], \"verified\": false}}",
-            errs_json.join(", ")
-        );
-    }
-
-    let mut elaborator = Elaborator::new();
-    let results = elaborator.elaborate_package(&pkg);
-
-    // Map each theorem's AST steps to rich JSON steps
-    let mut ast_theorems: HashMap<String, &proof::ast::Theorem> = HashMap::new();
-    for item in &file_ast.items {
-        if let Item::Theorem(thm) = item {
-            ast_theorems.insert(thm.name.clone(), thm);
-        }
-    }
-
-    let mut theorems_json = Vec::new();
-    let mut all_verified = true;
-
-    for res in results {
-        let ast_thm = ast_theorems.get(&res.name);
-        let mut steps_json = Vec::new();
-
-        if let Some(thm) = ast_thm {
-            for (idx, step) in thm.proof.iter().enumerate() {
-                let (step_text, rule_opt, conclusion_opt) = match &step.kind {
-                    ProofStepKind::Suppose { name, prop } => {
-                        (format!("suppose {} : {}", name, prop), None, Some(format!("{}", prop)))
-                    }
-                    ProofStepKind::Have { name, prop, from, .. } => {
-                        let name_part = name.as_deref().unwrap_or("h");
-                        let from_part = if from.is_empty() { "".into() } else { format!(" from {}", from.join(", ")) };
-                        (format!("have {} : {}{}", name_part, prop, from_part), None, Some(format!("{}", prop)))
-                    }
-                    ProofStepKind::Derive { name, prop, from, using_rule } => {
-                        let name_part = name.as_deref().unwrap_or("h");
-                        let from_part = if from.is_empty() { "".into() } else { format!(" from {}", from.join(", ")) };
-                        let using_part = using_rule.as_deref().map(|r| format!(" using {}", r)).unwrap_or_default();
-                        (format!("derive {} : {}{}{}", name_part, prop, from_part, using_part), using_rule.clone(), Some(format!("{}", prop)))
-                    }
-                    ProofStepKind::Therefore { prop, from } => {
-                        let from_part = if from.is_empty() { "".into() } else { format!(" from {}", from.join(", ")) };
-                        (format!("therefore {}{}", prop, from_part), None, Some(format!("{}", prop)))
-                    }
-                    ProofStepKind::Take(binders) => {
-                        let b_names: Vec<String> = binders.iter().map(|b| b.name.clone()).collect();
-                        (format!("take {}", b_names.join(", ")), None, None)
-                    }
-                    ProofStepKind::Construct { name, as_desc, args } => {
-                        let a_str: Vec<String> = args.iter().map(|t| t.to_string()).collect();
-                        (format!("construct {} as {} of {}", name, as_desc, a_str.join(", ")), None, None)
-                    }
-                    _ => ("proof step".into(), None, None),
-                };
-
-                let rule_field = match rule_opt {
-                    Some(r) => format!(", \"rule\": {}", json_str(&r)),
-                    None => "".into(),
-                };
-                let concl_field = match conclusion_opt {
-                    Some(c) => format!(", \"conclusion\": {}", json_str(&c)),
-                    None => "".into(),
-                };
-
-                steps_json.push(format!(
-                    "{{\"id\": {}, \"text\": {}, \"status\": \"Valid\"{}{}}}",
-                    idx + 1,
-                    json_str(&step_text),
-                    rule_field,
-                    concl_field
-                ));
-            }
-        }
-
-        if let Some(proven) = res.proven {
-            theorems_json.push(format!(
-                "{{\"name\": {}, \"status\": \"Verified\", \"proven\": {}, \"steps\": [{}]}}",
-                json_str(&res.name),
-                json_str(&proven.to_string()),
-                steps_json.join(", ")
-            ));
-        } else {
-            all_verified = false;
-            let err_msgs: Vec<String> = res.errors.iter().map(|e| json_str(&format!("{:?}", e))).collect();
-            theorems_json.push(format!(
-                "{{\"name\": {}, \"status\": \"Rejected\", \"errors\": [{}], \"steps\": [{}]}}",
-                json_str(&res.name),
-                err_msgs.join(", "),
-                steps_json.join(", ")
-            ));
-        }
-    }
-
-    // Geometry Scene Generation
-    let mut scene_json = String::from("{}");
-    if let Some(fig) = pkg.figures.first() {
-        let doc_scene = proof::editor::GeometryScene::from_geo_figure(fig);
-        let mut pts_json = Vec::new();
-        for (id, pos) in &doc_scene.point_positions {
-            pts_json.push(format!("{{\"id\": \"pt#{}\", \"x\": {}, \"y\": {}}}", id.0, pos.x, pos.y));
-        }
-        scene_json = format!("{{\"name\": {}, \"points\": [{}]}}", json_str(&fig.name), pts_json.join(", "));
-    }
-
-    format!(
-        "{{\"status\": \"Ok\", \"verified\": {}, \"theorems\": [{}], \"geometryScene\": {}}}",
-        all_verified,
-        theorems_json.join(", "),
-        scene_json
-    )
-}
+use std::path::Path;
 
 fn handle_client(mut stream: TcpStream) {
-    let mut buffer = [0; 65536];
+    let mut buffer = [0; 16384];
     let bytes_read = match stream.read(&mut buffer) {
-        Ok(n) => n,
-        Err(_) => return,
+        Ok(n) if n > 0 => n,
+        _ => return,
     };
+
     let request = String::from_utf8_lossy(&buffer[..bytes_read]);
 
+    // Handle CORS preflight
     if request.starts_with("OPTIONS") {
-        let response = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n";
+        let response = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n";
         let _ = stream.write_all(response.as_bytes());
         return;
     }
 
-    if request.contains("POST /api/verify") {
-        let body = if let Some(idx) = request.find("\r\n\r\n") {
-            &request[idx + 4..]
-        } else {
-            ""
-        };
+    // Handle POST verification or synthesis request
+    if request.starts_with("POST") {
+        let is_synthesize = request.starts_with("POST /api/synthesize")
+            || request.contains("\"action\":\"synthesize\"")
+            || request.contains("\"synthesize\":true");
 
-        // Extract code from json or raw body
-        let code = if let Some(start) = body.find("\"code\":\"") {
-            let rest = &body[start + 8..];
-            if let Some(end) = rest.find("\"}") {
-                rest[..end].replace("\\n", "\n").replace("\\\"", "\"")
+        let code = if let Some(body_start) = request.find("\r\n\r\n") {
+            let body = &request[body_start + 4..];
+            if let Some(code_pos) = body.find("\"code\":") {
+                let rest = &body[code_pos + 7..];
+                if let Some(start_quote) = rest.find('\"') {
+                    let rest_quote = &rest[start_quote + 1..];
+                    if let Some(end_quote) = rest_quote.find('\"') {
+                        rest_quote[..end_quote].replace("\\n", "\n").replace("\\\"", "\"")
+                    } else {
+                        body.to_string()
+                    }
+                } else {
+                    body.to_string()
+                }
             } else {
                 body.to_string()
             }
         } else {
-            body.to_string()
+            "".to_string()
         };
 
-        let result_json = process_proof_request(&code);
+        let result_json = if is_synthesize {
+            let step = proof::synthesizer::ProofSynthesizer::infill_next_step(&code);
+            let candidates = proof::synthesizer::ProofSynthesizer::synthesize_candidates(&code);
+            let step_str = step.map(|s| s.to_json()).unwrap_or_else(|| "null".to_string());
+            let candidates_str: Vec<String> = candidates.iter().map(|c| c.to_json()).collect();
+            format!(
+                "{{\"step\": {}, \"candidates\": [{}]}}",
+                step_str,
+                candidates_str.join(", ")
+            )
+        } else {
+            process_proof_request(&code)
+        };
+
         let response = format!(
-            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
             result_json.len(),
             result_json
         );
@@ -186,23 +70,313 @@ fn handle_client(mut stream: TcpStream) {
         return;
     }
 
-    // Serve static files
+    // Serve frontend static files
+    if request.starts_with("GET") {
+        let first_line = request.lines().next().unwrap_or("");
+        let mut path = "/";
+        let parts: Vec<&str> = first_line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            path = parts[1];
+        }
+
+        let clean_path = if path == "/" {
+            "index.html"
+        } else {
+            path.trim_start_matches('/')
+        };
+
+        let file_content = std::fs::read(std::path::Path::new("static").join(clean_path))
+            .or_else(|_| std::fs::read(std::path::Path::new("proof/static").join(clean_path)))
+            .or_else(|_| std::fs::read("static/index.html"))
+            .or_else(|_| std::fs::read("proof/static/index.html"));
+
+        if let Ok(bytes) = file_content {
+            let content_type = if clean_path.ends_with(".html") || path == "/" {
+                "text/html; charset=utf-8"
+            } else if clean_path.ends_with(".js") {
+                "application/javascript; charset=utf-8"
+            } else if clean_path.ends_with(".css") {
+                "text/css; charset=utf-8"
+            } else if clean_path.ends_with(".svg") {
+                "image/svg+xml"
+            } else if clean_path.ends_with(".wasm") {
+                "application/wasm"
+            } else {
+                "application/octet-stream"
+            };
+
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n",
+                content_type,
+                bytes.len()
+            );
+            let _ = stream.write_all(header.as_bytes());
+            let _ = stream.write_all(&bytes);
+            return;
+        }
+    }
+
+    // Default status
     let response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nProofer Daemon Online";
     let _ = stream.write_all(response.as_bytes());
 }
 
+/// Execute batch verification on a source file.
+pub fn execute_batch_check(file_path: &Path) -> Result<bool, String> {
+    let content = std::fs::read_to_string(file_path)
+        .map_err(|e| format!("Cannot read file {:?}: {}", file_path, e))?;
+
+    let mut engine = IncrementalEngine::new();
+    let result = engine.compile_source(&content, None)
+        .map_err(|e| format!("Verification error: {}", e))?;
+
+    println!("Checking {:?}", file_path);
+    for thm in &result.theorems {
+        let status = if thm.is_verified() { "PASS" } else { "FAIL" };
+        println!("  [{}] theorem '{}'", status, thm.name);
+    }
+    println!("Completed in {} µs (Reused: {}, Recompiled: {})",
+        result.elapsed_micros, result.reused_count, result.recompiled_count);
+
+    Ok(result.verified)
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 && args[1] == "--server" {
-        let port = 8086;
-        let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).expect("Failed to bind server");
-        println!("🚀 Proofer Verification Server listening on http://127.0.0.1:{}", port);
-        for stream in listener.incoming() {
-            if let Ok(s) = stream {
-                std::thread::spawn(|| handle_client(s));
+    if args.len() > 1 {
+        match args[1].as_str() {
+            "--server" | "serve" => {
+                let port: u16 = std::env::var("PORT")
+                    .ok()
+                    .and_then(|p| p.parse().ok())
+                    .unwrap_or(8086);
+                let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+                let bind_addr = format!("{}:{}", host, port);
+                let listener = TcpListener::bind(&bind_addr).unwrap_or_else(|e| {
+                    eprintln!("Failed to bind server to {}: {}", bind_addr, e);
+                    std::process::exit(1);
+                });
+                println!("Proofer Verification Server listening on http://{}", bind_addr);
+                for stream in listener.incoming() {
+                    if let Ok(s) = stream {
+                        std::thread::spawn(|| handle_client(s));
+                    }
+                }
+            }
+            "lsp" | "--lsp" => {
+                let _ = proof::lsp::run_server();
+            }
+            "daemon" => {
+                let stdin = std::io::stdin();
+                let stdout = std::io::stdout();
+                let mut reader = BufReader::new(stdin.lock());
+                let mut writer = stdout.lock();
+                let mut line = String::new();
+
+                while let Ok(n) = reader.read_line(&mut line) {
+                    if n == 0 {
+                        break;
+                    }
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        let code = if let Some(code_pos) = trimmed.find("\"code\":") {
+                            let rest = &trimmed[code_pos + 7..];
+                            if let Some(start_quote) = rest.find('\"') {
+                                let rest_quote = &rest[start_quote + 1..];
+                                if let Some(end_quote) = rest_quote.find('\"') {
+                                    rest_quote[..end_quote].replace("\\n", "\n").replace("\\\"", "\"")
+                                } else {
+                                    trimmed.to_string()
+                                }
+                            } else {
+                                trimmed.to_string()
+                            }
+                        } else {
+                            trimmed.to_string()
+                        };
+
+                        let result = process_proof_request(&code);
+                        let _ = writeln!(writer, "{}", result);
+                        let _ = writer.flush();
+                    }
+                    line.clear();
+                }
+            }
+            "verify" => {
+                let code = if args.len() > 2 && args[2] != "-" {
+                    match std::fs::read_to_string(&args[2]) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("Error reading file {}: {}", args[2], e);
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    let mut buffer = String::new();
+                    if let Err(e) = std::io::stdin().read_to_string(&mut buffer) {
+                        eprintln!("Error reading from stdin: {}", e);
+                        std::process::exit(1);
+                    }
+                    buffer
+                };
+                let result = process_proof_request(&code);
+                println!("{}", result);
+            }
+            "check" => {
+                if args.len() < 3 {
+                    eprintln!("Usage: proofer check [--json] <file.proof>");
+                    std::process::exit(1);
+                }
+                let is_json = args.iter().any(|a| a == "--json");
+                let file_arg = args.iter().skip(2).find(|a| *a != "--json");
+                let path_str = match file_arg {
+                    Some(p) => p,
+                    None => {
+                        eprintln!("Usage: proofer check [--json] <file.proof>");
+                        std::process::exit(1);
+                    }
+                };
+                let path = Path::new(path_str);
+                if is_json {
+                    match std::fs::read_to_string(path) {
+                        Ok(code) => {
+                            let result = process_proof_request(&code);
+                            println!("{}", result);
+                        }
+                        Err(e) => {
+                            eprintln!("Cannot read file {:?}: {}", path, e);
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    match execute_batch_check(path) {
+                        Ok(true) => {
+                            println!("Verification succeeded.");
+                            std::process::exit(0);
+                        }
+                        Ok(false) => {
+                            eprintln!("Verification failed.");
+                            std::process::exit(1);
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
+            "repl" => {
+                println!("Proofer Interactive REPL v0.1.0");
+                println!("Type theorem definitions or 'quit' to exit.\n");
+                let mut engine = IncrementalEngine::new();
+                let stdin = std::io::stdin();
+                let mut buffer = String::new();
+
+                loop {
+                    print!("proofer> ");
+                    let _ = std::io::stdout().flush();
+                    buffer.clear();
+                    if stdin.read_line(&mut buffer).is_err() || buffer.trim() == "quit" {
+                        break;
+                    }
+                    let trimmed = buffer.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    match engine.compile_source(trimmed, None) {
+                        Ok(res) => {
+                            for thm in res.theorems {
+                                println!("  {} (verified: {})", thm.name, thm.is_verified());
+                            }
+                        }
+                        Err(e) => println!("  Error: {}", e),
+                    }
+                }
+            }
+            "new" => {
+                if args.len() < 3 {
+                    eprintln!("Usage: proofer new <path_or_name>");
+                    std::process::exit(1);
+                }
+                let target_path = Path::new(&args[2]);
+                let project_name = target_path.file_name().and_then(|n| n.to_str()).unwrap_or("proof_project");
+                match proof::package::PackageManager::create_project(target_path, project_name) {
+                    Ok(()) => {
+                        println!("Created new Proofer package '{}' at {:?}", project_name, target_path);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create project: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            "build" => {
+                let target_dir = if args.len() > 2 {
+                    Path::new(&args[2])
+                } else {
+                    Path::new(".")
+                };
+                match proof::package::PackageManager::build_project(target_dir) {
+                    Ok(summary) => {
+                        println!("Package: {} v{}", summary.package_name, summary.version);
+                        println!("Files: {}, Theorems: {} (Verified: {})", summary.files_count, summary.theorems_count, summary.verified_count);
+                        if !summary.errors.is_empty() {
+                            eprintln!("\nVerification Errors:");
+                            for err in summary.errors {
+                                eprintln!("  - {}", err);
+                            }
+                            std::process::exit(1);
+                        } else {
+                            println!("All theorems in package verified successfully.");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Build failed: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            "synthesize" => {
+                if args.len() < 3 {
+                    eprintln!("Usage: proofer synthesize <file.proof>");
+                    std::process::exit(1);
+                }
+                let path = Path::new(&args[2]);
+                match std::fs::read_to_string(path) {
+                    Ok(code) => {
+                        if let Some(step) = proof::synthesizer::ProofSynthesizer::infill_next_step(&code) {
+                            println!("Synthesized Step (Kernel Verified: {}):", step.verified_by_kernel);
+                            println!("  {}", step.text);
+                            println!("Explanation: {}", step.explanation);
+                        } else {
+                            println!("No valid verified step could be synthesized for this context.");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Cannot read file {:?}: {}", path, e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            _ => {
+                println!("Unknown command: {}", args[1]);
+                println!("Usage:");
+                println!("  proofer --server          Start verification daemon");
+                println!("  proofer check <file>      Batch check proof file");
+                println!("  proofer repl              Start interactive REPL");
+                println!("  proofer new <dir>         Create new proof package");
+                println!("  proofer build [dir]       Build and verify entire package");
+                println!("  proofer synthesize <file> Synthesize next verified proof step");
             }
         }
     } else {
-        println!("Run with `cargo run -- --server` to start the live interactive verification daemon.");
+        println!("Proofer Proof System");
+        println!("Usage:");
+        println!("  proofer --server          Start verification daemon");
+        println!("  proofer check <file>      Batch check proof file");
+        println!("  proofer repl              Start interactive REPL");
+        println!("  proofer new <dir>         Create new proof package");
+        println!("  proofer build [dir]       Build and verify entire package");
+        println!("  proofer synthesize <file> Synthesize next verified proof step");
     }
 }

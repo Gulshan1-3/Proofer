@@ -1,0 +1,31 @@
+theorem isosceles_base_angles:
+    AB = AC -> angle_ABC = angle_ACB
+proof
+    suppose h1 : AB = AC
+    derive h2 : angle_ABC = angle_ACB from h1 using IsoscelesBaseAngles
+    therefore angle_ABC = angle_ACB from h2
+end
+
+theorem triangle_angle_sum:
+    triangle(ABC) -> angle_sum = 180
+proof
+    suppose h1 : triangle(ABC)
+    derive h2 : angle_sum = 180 from h1 using TriangleAngleSum
+    therefore angle_sum = 180 from h2
+end
+
+theorem triangle_midpoint_theorem:
+    midpoint(M, AB) and midpoint(N, AC) -> parallel(line_MN, line_BC)
+proof
+    suppose h1 : midpoint(M, AB) and midpoint(N, AC)
+    derive h2 : parallel(line_MN, line_BC) from h1 using MidpointBisects
+    therefore parallel(line_MN, line_BC) from h2
+end
+
+theorem congruent_triangles_sss:
+    AB = DE and BC = EF and CA = FD -> congruent(triangle_ABC, triangle_DEF)
+proof
+    suppose h1 : AB = DE and BC = EF and CA = FD
+    derive h2 : congruent(triangle_ABC, triangle_DEF) from h1 using CongruentTrianglesSSS
+    therefore congruent(triangle_ABC, triangle_DEF) from h2
+end

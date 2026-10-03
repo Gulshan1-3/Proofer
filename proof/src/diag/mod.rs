@@ -1,4 +1,4 @@
-use crate::syntax::span::{FileId, Span};
+use crate::syntax::span::Span;
 use crate::syntax::source::SourceMap;
 use std::fmt;
 

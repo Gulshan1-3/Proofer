@@ -18,7 +18,7 @@ use crate::kernel::{
 use crate::syntax::span::Span;
 
 /// Result of elaborating and checking a single theorem.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ElabResult {
     /// The theorem name.
     pub name: String,
@@ -28,8 +28,14 @@ pub struct ElabResult {
     pub errors: Vec<ElabError>,
 }
 
+impl ElabResult {
+    pub fn is_verified(&self) -> bool {
+        self.proven.is_some() && self.errors.is_empty()
+    }
+}
+
 /// Errors during elaboration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ElabError {
     /// The kernel rejected the constructed proof object.
     KernelRejected {

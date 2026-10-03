@@ -1,0 +1,12 @@
+[package]
+name = "mathlib"
+version = "0.1.0"
+authors = ["Proofer Mathematical Working Group"]
+edition = "2026"
+description = "Standard Euclidean Geometry and Formal Logic Library for Proofer"
+
+[modules]
+triangles = "triangles.proof"
+circles = "circles.proof"
+quadrilaterals = "quadrilaterals.proof"
+logic = "logic.proof"

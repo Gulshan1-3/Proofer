@@ -1,9 +1,30 @@
-# Build and compilation outputs
+# Rust build and compilation outputs
 target/
 **/target/
+proof-wasm/target/
+proof/target/
 
-# Documentation
-docs/
+# Node / JS dependencies and build outputs
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+frontend/dist/
+out/
+**/out/
+vscode-extension/out/
+.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Packaged extensions & large binaries (should not be in git)
+*.vsix
+**/*.vsix
+
+# Scratch scripts, temporary test drivers & benchmarks
+scratch/
+benchmark_performance.cjs
 
 # IDE and Editor files
 .idea/
@@ -16,5 +37,3 @@ docs/
 # Temporary files and logs
 *.log
 *.tmp
-node_modules/
-dist/

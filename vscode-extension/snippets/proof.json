@@ -1,0 +1,69 @@
+{
+  "Theorem Definition": {
+    "prefix": "thm",
+    "body": [
+      "theorem ${1:theorem_name}:",
+      "    ${2:hypothesis} -> ${3:conclusion}",
+      "proof",
+      "    suppose h1 : ${2:hypothesis}",
+      "    derive h2 : ${3:conclusion} from h1 using ${4:Rule}",
+      "    therefore ${3:conclusion} from h2",
+      "end"
+    ],
+    "description": "Standard theorem definition template"
+  },
+  "Geometric Theorem (Triangle)": {
+    "prefix": "geom_tri",
+    "body": [
+      "theorem ${1:isosceles_base_angles}:",
+      "    AB = AC -> angle_ABC = angle_ACB",
+      "proof",
+      "    suppose h1 : AB = AC",
+      "    derive h2 : angle_ABC = angle_ACB from h1 using IsoscelesBaseAngles",
+      "    therefore angle_ABC = angle_ACB from h2",
+      "end"
+    ],
+    "description": "Geometric triangle theorem template"
+  },
+  "Geometric Theorem (Circle)": {
+    "prefix": "geom_circle",
+    "body": [
+      "theorem ${1:thales_semicircle}:",
+      "    diameter(AB) and on_circle(C) -> angle_ACB = 90",
+      "proof",
+      "    suppose h1 : diameter(AB) and on_circle(C)",
+      "    derive h2 : angle_ACB = 90 from h1 using InscribedAngle",
+      "    therefore angle_ACB = 90 from h2",
+      "end"
+    ],
+    "description": "Geometric circle theorem template (Thales)"
+  },
+  "Suppose Step": {
+    "prefix": "suppose",
+    "body": [
+      "suppose ${1:h1} : ${2:proposition}"
+    ],
+    "description": "Hypothesis assumption step"
+  },
+  "Derive Step": {
+    "prefix": "derive",
+    "body": [
+      "derive ${1:h2} : ${2:proposition} from ${3:h1} using ${4:Rule}"
+    ],
+    "description": "Inference derivation step"
+  },
+  "Therefore Step": {
+    "prefix": "therefore",
+    "body": [
+      "therefore ${1:proposition} from ${2:h}"
+    ],
+    "description": "Final theorem conclusion step"
+  },
+  "Construct Step": {
+    "prefix": "construct",
+    "body": [
+      "construct ${1:M} as ${2:midpoint} of ${3:AB}"
+    ],
+    "description": "Geometric entity construction step"
+  }
+}

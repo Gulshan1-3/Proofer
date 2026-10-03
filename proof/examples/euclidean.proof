@@ -1,0 +1,15 @@
+theorem vertical_angles:
+    intersect(line_AB, line_CD) -> angle_AEC = angle_BED
+proof
+    suppose h1 : intersect(line_AB, line_CD)
+    derive h2 : angle_AEC = angle_BED from h1 using VerticalAngles
+    therefore angle_AEC = angle_BED from h2
+end
+
+theorem isosceles_base_angles:
+    AB = AC -> angle_ABC = angle_ACB
+proof
+    suppose h1 : AB = AC
+    derive h2 : angle_ABC = angle_ACB from h1 using IsoscelesBaseAngles
+    therefore angle_ABC = angle_ACB from h2
+end

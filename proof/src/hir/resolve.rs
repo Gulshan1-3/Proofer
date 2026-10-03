@@ -469,7 +469,7 @@ impl Resolver {
                     let hir_prop = self.resolve_proposition(prop);
                     match &hir_prop.kind {
                         HirPropKind::Equal(left, right) => {
-                            let mut extract_segment = |term: &HirTerm| -> Option<crate::geometry::GeoTerm> {
+                            let extract_segment = |term: &HirTerm| -> Option<crate::geometry::GeoTerm> {
                                 match &term.kind {
                                     HirTermKind::Const(name) if name.len() == 2 => {
                                         let chars: Vec<char> = name.chars().collect();

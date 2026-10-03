@@ -1,0 +1,23 @@
+theorem modus_ponens_identity:
+    P and (P -> Q) -> Q
+proof
+    suppose h1 : P and (P -> Q)
+    derive h2 : Q from h1 using ModusPonens
+    therefore Q from h2
+end
+
+theorem double_negation:
+    not(not(P)) -> P
+proof
+    suppose h1 : not(not(P))
+    derive h2 : P from h1 using DoubleNegation
+    therefore P from h2
+end
+
+theorem conjunction_elimination:
+    P and Q -> P
+proof
+    suppose h1 : P and Q
+    derive h2 : P from h1 using AndEliminationLeft
+    therefore P from h2
+end

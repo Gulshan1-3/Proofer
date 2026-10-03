@@ -10,9 +10,8 @@
 //! - Revision tracking for stale result rejection.
 //! - Selection mapping: linking AST span <-> Semantic ID <-> Visual canvas element.
 
-use crate::syntax::span::Span;
-use crate::id::{PointId, FactId, Revision};
-use crate::geometry::{GeoFigure, GeoObject, GeoRelKind, GeoProp, GeoTerm};
+use crate::id::{PointId, Revision};
+use crate::geometry::{GeoFigure, GeoObject};
 use crate::parser::Parser;
 use crate::hir::resolve::Resolver;
 use crate::elab::{Elaborator, ElabResult};

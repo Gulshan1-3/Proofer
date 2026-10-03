@@ -1,0 +1,23 @@
+theorem parallelogram_opposite_sides:
+    parallelogram(ABCD) -> AB = CD and BC = DA
+proof
+    suppose h1 : parallelogram(ABCD)
+    derive h2 : AB = CD and BC = DA from h1 using ParallelogramOppSides
+    therefore AB = CD and BC = DA from h2
+end
+
+theorem cyclic_quad_opposite_angles:
+    cyclic(ABCD) -> angle_DAB + angle_BCD = 180
+proof
+    suppose h1 : cyclic(ABCD)
+    derive h2 : angle_DAB + angle_BCD = 180 from h1 using CyclicQuad
+    therefore angle_DAB + angle_BCD = 180 from h2
+end
+
+theorem rhombus_diagonals_perpendicular:
+    rhombus(ABCD) -> perpendicular(line_AC, line_BD)
+proof
+    suppose h1 : rhombus(ABCD)
+    derive h2 : perpendicular(line_AC, line_BD) from h1 using RhombusDiagonals
+    therefore perpendicular(line_AC, line_BD) from h2
+end

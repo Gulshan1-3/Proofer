@@ -1,6 +1,6 @@
 use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
-use crate::syntax::span::{FileId, Span, Spanned};
+use crate::syntax::span::{Span, Spanned};
 
 pub mod prelude {
     pub use super::{Token, TokenType};

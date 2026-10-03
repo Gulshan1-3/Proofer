@@ -1,0 +1,23 @@
+theorem thales_theorem:
+    diameter(AB) and on_circle(C) -> angle_ACB = 90
+proof
+    suppose h1 : diameter(AB) and on_circle(C)
+    derive h2 : angle_ACB = 90 from h1 using InscribedAngle
+    therefore angle_ACB = 90 from h2
+end
+
+theorem inscribed_angle_subtended:
+    subtends(arc_AB, angle_ACB) and subtends(arc_AB, angle_ADB) -> angle_ACB = angle_ADB
+proof
+    suppose h1 : subtends(arc_AB, angle_ACB) and subtends(arc_AB, angle_ADB)
+    derive h2 : angle_ACB = angle_ADB from h1 using InscribedAngle
+    therefore angle_ACB = angle_ADB from h2
+end
+
+theorem tangent_perpendicular_radius:
+    tangent(line_PT, circle_O) and radius(segment_OT, circle_O) -> perpendicular(line_PT, segment_OT)
+proof
+    suppose h1 : tangent(line_PT, circle_O) and radius(segment_OT, circle_O)
+    derive h2 : perpendicular(line_PT, segment_OT) from h1 using TangentPerpendicularRadius
+    therefore perpendicular(line_PT, segment_OT) from h2
+end

@@ -1,0 +1,10 @@
+**/.git
+**/.gitignore
+**/node_modules
+**/target
+frontend/dist
+proof/target
+proof/static/*
+!proof/static/.gitkeep
+*.log
+scratch/

@@ -303,40 +303,129 @@ When an invalid proof is evaluated, the kernel returns:
     `-- tests/                  # End-to-end integration test suites (Stages 0 - 8)
 ```
 
----
+## 6. Local Installation and Running Guide
 
-## 6. Building and Running
+Proofer is designed as a **local-first workstation** and does not require cloud hosting. You can run it via the **Command Line Interface (CLI)**, the **Interactive Web Workstation**, or inside **VS Code**.
 
 ### Prerequisites
-- Rust compiler (edition 2024, version 1.85 or higher)
-- Cargo package manager
-- Python 3 (for serving the static workstation files)
 
-### Running the Test Suite
-To verify the full compiler, kernel, geometry rules, and editor models across all test stages:
+Ensure you have the following installed on your machine:
+- **Rust & Cargo** (1.80+ or latest stable):
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ```
+- **Node.js & npm** (Node 18+ or 20+ recommended):
+  ```bash
+  # Check versions
+  node -v
+  npm -v
+  ```
+- *(Optional)* **VS Code** for the native theorem proving extension.
+
+---
+
+### Method A: Interactive Web Workstation (Recommended)
+
+The Web Workstation provides the 3-pane interactive environment with synchronous geometry visualization, step inspector, parametric deformation, and AI co-prover infilling.
+
+#### 1. Start the Rust Verification Daemon
+In your first terminal, start the kernel daemon on port 8086:
+```bash
+cd proof
+cargo run --release -- --server
+```
+> The daemon will start listening on `http://127.0.0.1:8086`.
+
+#### 2. Start the Frontend Dev Server
+In a second terminal, install dependencies and launch Vite:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+#### 3. Open in Browser
+Open your browser to:
+```
+http://localhost:5173
+```
+*Tip: Any edit in the editor will be verified by the local Rust daemon with sub-millisecond latency.*
+
+---
+
+### Method B: Native VS Code Extension
+
+For an integrated theorem-proving experience directly inside VS Code:
+
+1. **Build and install the extension (`.vsix`)**:
+   ```bash
+   cd vscode-extension
+   npm install
+   npm run compile
+   npx @vscode/vsce package
+   code --install-extension proofer-vscode-0.1.0.vsix
+   ```
+   *(Or install the pre-packaged `proofer-vscode-0.1.0.vsix` directly from the project root).*
+
+2. **Start the verification daemon**:
+   ```bash
+   cargo run --manifest-path proof/Cargo.toml --release -- --server 127.0.0.1:8086
+   ```
+
+3. **Open any `.proof` file**:
+   Open files such as `mathlib/triangles.proof`. Use:
+   - `Proofer: Open Interactive Workstation` from the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
+   - `✨ Infill Step (Co-Prover)` to synthesize deductions with kernel guardrails.
+
+---
+
+### Method C: Command-Line Interface (CLI)
+
+You can build and install the `proof` binary directly to your PATH:
+
+```bash
+cd proof
+cargo install --path .
+```
+
+#### Available CLI Commands:
+
+- **Check a single proof file**:
+  ```bash
+  proof check mathlib/triangles.proof
+  # Or with JSON output:
+  proof check --json mathlib/triangles.proof
+  ```
+
+- **Interactive REPL**:
+  ```bash
+  proof repl
+  ```
+
+- **Package Manager (`mathlib`)**:
+  ```bash
+  # Create a new proof project
+  proof new my_theorems
+
+  # Build and verify all proofs in a package
+  proof build mathlib/
+  ```
+
+- **Synthesize the next proof step (AI Co-Prover)**:
+  ```bash
+  proof synthesize mathlib/circles.proof
+  ```
+
+---
+
+### Running Tests
+
+To run the complete test suite (84+ tests across formal kernel, geometry solvers, incremental compiler, adversarial soundness, and package manager):
+
 ```bash
 cd proof
 cargo test
 ```
-
-### Running the Live Workstation
-1. Start the Proofer verification daemon:
-   ```bash
-   cd proof
-   cargo run -- --server
-   ```
-   The verification daemon will listen on `http://127.0.0.1:8086`.
-
-2. In a separate terminal, serve the frontend workstation:
-   ```bash
-   cd proof
-   python3 -m http.server 8085 --directory static
-   ```
-
-3. Open your browser to:
-   ```
-   http://localhost:8085/
-   ```
 
 ---
 
@@ -345,3 +434,4 @@ cargo test
 1. Proof safety: No mathematical fact is certified unless checked by `src/kernel/checker.rs`.
 2. Clean separation: Elaboration, parser backtracking, and solver search reside strictly outside the trust boundary.
 3. Deterministic execution: Verification is deterministic, free of hidden side effects, and operates purely on explicit proof objects.
+

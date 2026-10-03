@@ -5,10 +5,10 @@
 //! Instead, it searches for a deduction chain and outputs a kernel `ProofObject`.
 //! The ProofObject is then submitted to the trusted `Checker` for verification.
 
-use std::collections::{HashSet, HashMap};
+use std::collections::HashMap;
 use crate::id::{FactId, IdGen};
 use crate::kernel::{
-    KProp, KTerm, ProofNode, ProofNodeId, ProofObject, Context, CheckResult, check_proof,
+    KProp, KTerm, ProofNode, ProofNodeId, ProofObject, Context,
 };
 
 /// Represents an automatically discovered deduction step.

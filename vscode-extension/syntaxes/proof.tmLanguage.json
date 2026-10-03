@@ -1,0 +1,154 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Proofer",
+  "scopeName": "source.proof",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#keywords" },
+    { "include": "#proof-verbs" },
+    { "include": "#rules" },
+    { "include": "#predicates" },
+    { "include": "#operators" },
+    { "include": "#hypotheses" },
+    { "include": "#numbers" },
+    { "include": "#strings" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.proof",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.line.number-sign.proof",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.declaration.theorem.proof",
+          "match": "\\b(theorem)\\b"
+        },
+        {
+          "name": "keyword.control.proof.proof",
+          "match": "\\b(proof|end|qed)\\b"
+        },
+        {
+          "name": "keyword.other.clause.proof",
+          "match": "\\b(as|of|from|using|to)\\b"
+        }
+      ]
+    },
+    "proof-verbs": {
+      "patterns": [
+        {
+          "name": "keyword.control.step.suppose.proof",
+          "match": "\\b(suppose)\\b"
+        },
+        {
+          "name": "keyword.control.step.have.proof",
+          "match": "\\b(have)\\b"
+        },
+        {
+          "name": "keyword.control.step.derive.proof",
+          "match": "\\b(derive)\\b"
+        },
+        {
+          "name": "keyword.control.step.therefore.proof",
+          "match": "\\b(therefore)\\b"
+        },
+        {
+          "name": "keyword.control.step.construct.proof",
+          "match": "\\b(construct)\\b"
+        },
+        {
+          "name": "keyword.control.step.take.proof",
+          "match": "\\b(take)\\b"
+        }
+      ]
+    },
+    "rules": {
+      "patterns": [
+        {
+          "name": "entity.name.type.rule.proof",
+          "match": "\\b(IsoscelesBaseAngles|Thales|PythagoreanTheorem|AlternateInteriorAngles|TriangleAngleSum|CongruentTrianglesSSS|CongruentTrianglesSAS|CongruentTrianglesASA|InscribedAngle|VerticalAngles|ModusPonens|IntroAnd|ElimAnd|Reflexive|Symmetric|Transitive)\\b"
+        }
+      ]
+    },
+    "predicates": {
+      "patterns": [
+        {
+          "name": "support.function.geometry.proof",
+          "match": "\\b(diameter|on_circle|intersect|midpoint|altitude|bisector|angle_bisector|circle|line|triangle|inscribed|parallel|perpendicular|congruent|similar)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.logical.proof",
+          "match": "\\b(and|or|not|iff)\\b|->|\\|-"
+        },
+        {
+          "name": "keyword.operator.comparison.proof",
+          "match": "==|!=|<=|>=|=|<|>"
+        },
+        {
+          "name": "keyword.operator.arithmetic.proof",
+          "match": "[\\+\\-\\*/]"
+        },
+        {
+          "name": "punctuation.separator.proof",
+          "match": "[:;,]"
+        }
+      ]
+    },
+    "hypotheses": {
+      "patterns": [
+        {
+          "name": "variable.other.hypothesis.proof",
+          "match": "\\bh[0-9]*\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.proof",
+          "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.proof",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.proof",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "entity.name.variable.geometry.proof",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+        },
+        {
+          "name": "variable.name.proof",
+          "match": "\\b[a-z][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    }
+  }
+}

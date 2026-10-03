@@ -1,5 +1,5 @@
 use crate::{
-    ast::{self, *},
+    ast::*,
     diag::Diagnostic,
     lexer::Lexer,
     syntax::span::Span,

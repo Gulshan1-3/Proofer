@@ -1,0 +1,170 @@
+{
+  "name": "proofer-vscode",
+  "displayName": "Proofer: Formal Proof IDE & Mathematical Workstation",
+  "description": "Formal proof language support, interactive CAD geometry canvas, and debugger-style execution trace for Proofer.",
+  "version": "0.1.0",
+  "publisher": "proofer",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Education",
+    "Other"
+  ],
+  "keywords": [
+    "proofer",
+    "proof",
+    "theorem-prover",
+    "formal-verification",
+    "geometry",
+    "math"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:proof",
+    "onCommand:proofer.openWorkstation",
+    "onCommand:proofer.verifyProof",
+    "onCustomEditor:proofer.proofEditor"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "proof",
+        "aliases": [
+          "Proofer",
+          "proof"
+        ],
+        "extensions": [
+          ".proof"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "proof",
+        "scopeName": "source.proof",
+        "path": "./syntaxes/proof.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "proof",
+        "path": "./snippets/proof.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "proofer.openWorkstation",
+        "title": "Proofer: Open Workstation Panel",
+        "icon": "$(layout-sidebar-right)"
+      },
+      {
+        "command": "proofer.verifyProof",
+        "title": "Proofer: Verify Current Proof",
+        "icon": "$(play)"
+      },
+      {
+        "command": "proofer.synthesizeStep",
+        "title": "Proofer: Synthesize Next Proof Step (Co-Prover)",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "proofer.buildPackage",
+        "title": "Proofer: Build Proof Package",
+        "icon": "$(package)"
+      },
+      {
+        "command": "proofer.restartDaemon",
+        "title": "Proofer: Restart Verification Server"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "proofer.proofEditor",
+        "displayName": "Proofer Mathematical Workstation",
+        "selector": [
+          {
+            "filenamePattern": "*.proof"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "proofer.openWorkstation",
+          "when": "resourceLangId == proof",
+          "group": "navigation"
+        },
+        {
+          "command": "proofer.verifyProof",
+          "when": "resourceLangId == proof",
+          "group": "navigation"
+        },
+        {
+          "command": "proofer.synthesizeStep",
+          "when": "resourceLangId == proof",
+          "group": "navigation"
+        },
+        {
+          "command": "proofer.buildPackage",
+          "when": "resourceLangId == proof",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "proofer.verifyProof",
+          "when": "resourceLangId == proof",
+          "group": "1_modification"
+        },
+        {
+          "command": "proofer.openWorkstation",
+          "when": "resourceLangId == proof",
+          "group": "1_modification"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Proofer",
+      "properties": {
+        "proofer.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8086",
+          "description": "URL to the Proofer verification daemon."
+        },
+        "proofer.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to the proof CLI binary (defaults to finding local proof binary)."
+        },
+        "proofer.verifyOnChange": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically verify the active proof as you type."
+        },
+        "proofer.verifyOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Verify proof whenever the file is saved."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.js",
+    "watch": "node build.js --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.80.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^10.1.2"
+  }
+}

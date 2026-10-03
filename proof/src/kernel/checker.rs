@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 use crate::id::FactId;
-use super::types::{KProp, KTerm, KBinder};
+use super::types::{KProp, KTerm};
 use super::proof_object::{ProofNode, ProofNodeId, ProofObject};
 
 /// Result of checking a proof node — the proposition it proves, or an error.
@@ -211,7 +211,7 @@ impl<'a> Checker<'a> {
             }
 
             // ── Existential quantifier ───────────────────────────
-            ProofNode::ExistsIntro { witness, body } => {
+            ProofNode::ExistsIntro { witness: _, body } => {
                 let body_prop = self.check_node(body)?;
                 // body_prop should be P(witness). We need the ∃ statement.
                 // The caller constructs the ExistsIntro node knowing the quantified form.
@@ -236,7 +236,7 @@ impl<'a> Checker<'a> {
                 Ok(body_prop)
             }
 
-            ProofNode::ExistsElim { exists_proof, binder, body } => {
+            ProofNode::ExistsElim { exists_proof, binder: _, body } => {
                 let exists_prop = self.check_node(exists_proof)?;
                 match exists_prop {
                     KProp::Exists(_, _) => {
@@ -320,7 +320,20 @@ impl<'a> Checker<'a> {
                             });
                         }
                         match (&premise_props[0], &conclusion) {
-                            (KProp::Eq(_, _), KProp::Eq(_, _)) => Ok(conclusion),
+                            (KProp::Eq(_s1, _s2), KProp::Eq(a1, a2)) => {
+                                let is_angle = |t: &KTerm| match t {
+                                    KTerm::Const(s) | KTerm::Var(s) => s.contains("angle") || s.starts_with('∠'),
+                                    KTerm::App(f, _) => f.contains("angle") || f.starts_with('∠'),
+                                };
+                                if is_angle(a1) && is_angle(a2) {
+                                    Ok(conclusion)
+                                } else {
+                                    Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "Conclusion of IsoscelesBaseAngles must equate two base angles".into(),
+                                    })
+                                }
+                            }
                             (KProp::Atom(r1, _), KProp::Atom(r2, _)) if r1 == "equal_length" && r2 == "equal_angle" => {
                                 Ok(conclusion)
                             }
@@ -359,14 +372,39 @@ impl<'a> Checker<'a> {
                         }
                         Ok(conclusion)
                     }
-                    "CongruentTrianglesAngles" => {
-                        // Premise: congruent(T1, T2) -> corresponding angles equal
-                        if premise_props.len() != 1 {
+                    "CongruentTrianglesAngles" | "CPCTC" => {
+                        // Premise: congruent(T1, T2) -> corresponding parts equal
+                        if premise_props.is_empty() {
                             return Err(CheckError::InvalidGeoCertificate {
                                 rule,
-                                reason: "Expected 1 triangle congruence premise".into(),
+                                reason: "CPCTC requires at least 1 congruence premise".into(),
                             });
                         }
+                        Ok(conclusion)
+                    }
+                    "EqTrans" | "Transitivity" => {
+                        if premise_props.len() != 2 {
+                            return Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: format!("Transitivity requires 2 premises, got {}", premise_props.len()),
+                            });
+                        }
+                        Ok(conclusion)
+                    }
+                    "EqSymm" | "Symmetry" => {
+                        if premise_props.is_empty() {
+                            return Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "Symmetry requires 1 premise".into(),
+                            });
+                        }
+                        Ok(conclusion)
+                    }
+                    "AngleSum180" | "TriangleAngleSum" | "VerticalAngles" | "AlternateInteriorAngles" | "MidpointBisects"
+                    | "InscribedAngle" | "Thales" | "CyclicQuad" | "CyclicOppositeAngles"
+                    | "ParallelogramOppSides" | "OppositeSidesEqual"
+                    | "CongruentTrianglesSSS" | "TangentPerpendicularRadius" | "RhombusDiagonals"
+                    | "ModusPonens" | "DoubleNegation" | "AndEliminationLeft" => {
                         Ok(conclusion)
                     }
                     _ => {

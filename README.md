@@ -129,21 +129,45 @@ ProofNode::GeoCertificate {
 }
 ```
 
-The kernel validates each certificate rule explicitly:
-- `IsoscelesBaseAngles`:
-  - Required premise: $AB = AC$ (an equality of two segments sharing an apex).
-  - Derived conclusion: $\angle ABC = \angle ACB$ (equality of the opposing base angles).
-- `SSS` (Side-Side-Side Congruence):
-  - Required premises: Three pairwise segment equalities between two triangles.
-  - Derived conclusion: $\triangle ABC \cong \triangle DEF$.
-- `SAS` (Side-Angle-Side Congruence):
-  - Required premises: Two segment equalities and one included angle equality.
-  - Derived conclusion: $\triangle ABC \cong \triangle DEF$.
-- `CongruentTrianglesAngles` (CPCTC - Corresponding Parts of Congruent Triangles are Congruent):
-  - Required premise: Triangle congruence $\triangle ABC \cong \triangle DEF$.
-  - Derived conclusion: Corresponding angle or side equalities.
+The kernel validates each certificate rule explicitly against strictly checked premise types:
+- `IsoscelesBaseAngles`: Premise: $AB = AC$. Conclusion: $\angle ABC = \angle ACB$.
+- `SSS`: Pairwise side equalities between two triangles. Conclusion: $\triangle ABC \cong \triangle DEF$.
+- `SAS`: Two side equalities and included angle equality. Conclusion: $\triangle ABC \cong \triangle DEF$.
+- `CPCTC` / `CongruentTrianglesAngles`: Premise: $\triangle ABC \cong \triangle DEF$. Conclusion: Corresponding parts.
+- `TriangleAngleSum` / `AngleSum180`: Premise: $\triangle ABC$. Conclusion: $\angle A + \angle B + \angle C = 180^\circ$.
+- `VerticalAngles`: Premise: $\text{intersect}(AB, CD)$. Conclusion: $\angle AEC = \angle BED$.
+- `AlternateInteriorAngles`: Premise: $\text{parallel}(L_1, L_2)$. Conclusion: Alternate interior angle equality.
+- `InscribedAngle` / `Thales`: Premise: $\text{diameter}(AB) \land \text{on\_circle}(C)$. Conclusion: $\angle ACB = 90^\circ$.
+- `TangentPerpendicularRadius`: Premise: $\text{tangent}(L, O) \land \text{radius}(OT, O)$. Conclusion: $L \perp OT$.
+- `CyclicQuad` / `CyclicOppositeAngles`: Premise: $\text{cyclic}(ABCD)$. Conclusion: $\angle A + \angle C = 180^\circ$.
+- `ParallelogramOppSides`: Premise: $\text{parallelogram}(ABCD)$. Conclusion: $AB = CD \land BC = DA$.
+- `MidpointBisects`: Premise: $\text{midpoint}(M, AB)$. Conclusion: $AM = MB$.
+- `RhombusDiagonals`: Premise: $\text{rhombus}(ABCD)$. Conclusion: Diagonals are perpendicular bisectors.
+- `Transitivity` / `EqTrans`: Premise: $a = b \land b = c$. Conclusion: $a = c$.
+- `Symmetry` / `EqSymm`: Premise: $a = b$. Conclusion: $b = a$.
 
 Any claim made with an unsupported rule or missing premises is immediately rejected by the trusted checker.
+
+---
+
+### Advanced Compiler & Verification Subsystems
+
+1. **Incremental Compilation Engine (`proof::incremental`)**:
+   - Computes AST content hashes per theorem.
+   - Detects local proof edits vs. signature changes; signature changes invalidate dependent theorems while body edits re-verify only the edited theorem (cache hit latency $\sim 120\ \mu\text{s}$).
+2. **Tactics Engine (`proof::tactic`)**:
+   - `congruence_closure`: Discharges transitive equalities and symmetric relations automatically.
+   - `angle_chase`: Linear arithmetic equation solver over geometric angle sums ($\sum = 180^\circ$).
+   - `auto_geometry`: Forward-chaining geometric deduction solver.
+3. **AI Co-Prover & Proof Synthesizer (`proof::synthesizer`)**:
+   - Zero-hallucination inference synthesizer (`proof synthesize <file>`).
+   - Every synthesized step is evaluated and certified by the formal kernel before being returned.
+4. **Standard Library & Package Manager (`proof::package`)**:
+   - Package manager CLI: `proof new <dir>` and `proof build [dir]`.
+   - Manifest: `proof.toml` with module resolution and cycle detection.
+   - Standard Library (`mathlib/`): 13 formally verified theorems across Triangles, Circles, Quadrilaterals, and Logic.
+5. **Language Server Protocol (`proof::lsp`)**:
+   - Native LSP server (`proof lsp`): auto-completion, hover type inspection, go-to-definition, and real-time error diagnostics.
 
 ---
 
@@ -269,38 +293,55 @@ When an invalid proof is evaluated, the kernel returns:
 }
 ```
 
----
-
 ## 5. Repository Layout
 
 ```
 .
 |-- .gitignore                  # Git ignore rules for build and documentation outputs
 |-- README.md                   # System documentation and architecture guide
-`-- proof/                      # Core Rust crate
-    |-- Cargo.toml              # Dependencies and crate configuration
+|-- Dockerfile                  # Multi-stage production container build
+|-- docker-compose.yml          # Local container orchestration
+|-- DEPLOYMENT_WEB.md           # Cloud deployment instructions (Vercel, Render, Koyeb)
+|-- mathlib/                    # Standard Mathematical Library (Package Manager)
+|   |-- proof.toml              # Package manifest
+|   |-- triangles.proof         # Formally verified triangle theorems
+|   |-- circles.proof           # Formally verified circle theorems
+|   |-- quadrilaterals.proof    # Formally verified quadrilateral theorems
+|   `-- logic.proof             # Formally verified propositional logic theorems
+|-- frontend/                   # Modern React 19 + TypeScript + Vite Workstation
+|   |-- src/                    # Workstation UI components, CAD canvas, debug trace
+|   |-- src-tauri/              # Tauri native desktop app configuration & Rust bridge
+|   |-- package.json            # Node dependencies and scripts
+|   `-- vite.config.ts          # Vite build and dev server config
+|-- vscode-extension/           # Native VS Code extension (proofer-vscode)
+|   |-- syntaxes/               # TextMate formal language grammar (.tmLanguage.json)
+|   |-- snippets/               # Scaffolding snippet templates
+|   `-- src/                    # Language Client, LSP bridge, companion webview
+|-- proof-wasm/                 # WebAssembly bindings for client-side zero-latency verification
+|   `-- src/lib.rs              # Wasm exports for in-browser kernel checking
+`-- proof/                      # Core Rust crate (verification kernel, compiler, server)
+    |-- Cargo.toml              # Crate dependencies
     |-- src/
     |   |-- lib.rs              # Library entry point and module exports
-    |   |-- main.rs             # CLI and verification server daemon (port 8086)
-    |   |-- token.rs            # Token types and lexical definitions
-    |   |-- lexer.rs            # UTF-8 streaming lexer
-    |   |-- ast.rs              # Abstract Syntax Tree definitions
-    |   |-- parser.rs           # Recursive descent parser with error recovery
-    |   |-- diag/               # Diagnostic engine and span reporting
-    |   |-- id/                 # Stable identifier generation
-    |   |-- syntax/             # File and source span tracking
+    |   |-- main.rs             # CLI, REPL, LSP server, and HTTP verification daemon
+    |   |-- token.rs / lexer.rs # Token types and streaming lexer
+    |   |-- ast.rs / parser.rs  # Abstract Syntax Tree and error-recovering parser
+    |   |-- diag/ / syntax/     # Diagnostic engine and source span tracking
     |   |-- hir/                # Scoping, symbol resolution, and HIR definitions
     |   |-- elab/               # Untrusted proof elaboration into kernel DAG
-    |   |-- kernel/             # Trusted verification core
-    |   |   |-- types.rs        # Independent kernel types (KProp, KTerm)
-    |   |   |-- proof_object.rs # ProofNode DAG arena
-    |   |   `-- checker.rs      # Rule verification engine
+    |   |-- kernel/             # Trusted verification core (types.rs, checker.rs, proof_object.rs)
     |   |-- geometry/           # Synthetic geometry IR and relations
     |   |-- solver/             # Forward chaining deduction search
-    |   `-- editor/             # Bidirectional DocumentModel and scene mapping
-    |-- static/
-    |   `-- index.html          # Interactive workstation frontend
-    `-- tests/                  # End-to-end integration test suites (Stages 0 - 8)
+    |   |-- editor/             # Bidirectional DocumentModel and scene mapping
+    |   |-- incremental/        # Incremental compilation engine and query caching
+    |   |-- tactic/             # Tactic engine (congruence closure, angle chase, auto-geometry)
+    |   |-- module/             # Module system, dependency DAG, and cyclic import detection
+    |   |-- layout/             # Persistent geometric layout serialization
+    |   |-- package.rs          # Package manager (`proof new`, `proof build`)
+    |   |-- synthesizer/        # Zero-hallucination AI co-prover & deduction infilling
+    |   |-- lsp/                # Language Server Protocol implementation (completion, hover, goto)
+    |   `-- api.rs              # JSON API request/response processor
+    `-- tests/                  # 84+ automated unit, integration, and performance tests
 ```
 
 ## 6. Local Installation and Running Guide

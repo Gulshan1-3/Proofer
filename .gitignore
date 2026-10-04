@@ -37,3 +37,13 @@ benchmark_performance.cjs
 # Temporary files and logs
 *.log
 *.tmp
+
+# Internal specification & agent documentation
+*agent*.md
+*Agent*.md
+*AGENTS*.md
+*architecture*.md
+*Architecture*.md
+*ARCHITECTURE*.md
+docs/AGENTS.md
+docs/ARCHITECTURE.md

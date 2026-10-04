@@ -1,6 +1,12 @@
 # Proofer: Interactive Theorem Prover and Synthetic Geometry Workstation
 
-Proofer is a formal verification system and interactive geometry assistant written in Rust. It combines a small, trustworthy proof kernel based on natural deduction with a symbolic geometry representation and a bidirectional, reactive web workstation.
+[![Kernel Verification](https://img.shields.io/badge/Kernel-Verified%20(84%2F84%20Tests)-success?style=flat-square&logo=rust)](https://github.com/Gulshan1-3/Proofer)
+[![UI Workstation](https://img.shields.io/badge/Workstation-React%2019%20%2B%20Tauri-blue?style=flat-square&logo=react)](https://github.com/Gulshan1-3/Proofer)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://github.com/Gulshan1-3/Proofer)
+
+Proofer is a formal verification system and interactive geometry assistant written in Rust. It combines a small, trustworthy proof kernel based on natural deduction with a symbolic geometry representation and a bidirectional, reactive mathematical workstation.
+
+![Proofer Interactive Workstation](docs/images/workstation_main.png)
 
 The goal of this project is to provide a complete pipeline from concrete syntax to mechanical verification, paired with an interactive visual environment where geometric diagrams and formal proof statements remain synchronized in real time.
 
@@ -221,18 +227,34 @@ When a user clicks a tool on the canvas (such as "Midpoint (M)"):
 - The patch is applied to the document model, incrementing the document revision.
 - The full compilation and verification cycle executes. If verified, the updated scene displays the newly constructed median line $AM$, midpoint point $M$, and the decomposed sub-angles $\angle BAM$ and $\angle CAM$.
 
-#### 3. Step-by-Step Proof Graph Navigation
-The bottom panel displays the formal proof steps returned directly by the elaboration pass:
+#### 3. Three-Way Bidirectional Synchronization (Code ↔ Trace ↔ Canvas)
+Selecting any step in the proof trace highlights its corresponding line in the editor and focuses the affected geometric entities on the CAD canvas:
+
+![Three-Way Bidirectional Synchronization](docs/images/step_selection_sync.png)
+
 - Selecting Step 1 (`suppose h1 : AB = AC`) highlights segments $AB$ and $AC$ in amber.
 - Selecting Step 2 (`derive h2 : angle_ABC = angle_ACB using IsoscelesBaseAngles`) highlights base angles $\angle B$ and $\angle C$ in emerald green.
 - Selecting a rejected step highlights the contradictory entities in red and displays the kernel error diagnostic.
 
-#### 4. Parametric Triangle Deformation with Law of Cosines
-The canvas allows manual input for side lengths $AB$, $AC$, and $BC$ as well as direct vertex dragging:
-- When dragging the apex vertex $A$, the coordinate solver keeps $A$ on the perpendicular bisector line of $BC$ if the triangle is isosceles.
-- When side values are altered, the client uses the Law of Cosines to calculate internal angles:
-  $$\cos(A) = \frac{b^2 + c^2 - a^2}{2bc}, \quad \cos(B) = \frac{a^2 + c^2 - b^2}{2ac}$$
-- The system enforces the triangle inequality ($a + b > c$) and angle sum ($\sum = 180^\circ$) to prevent illegal geometric deformations.
+#### 4. Circle & Multi-Figure Synthetic Geometry (Thales' Theorem)
+Proofer visualizes circles, inscribed angles, diameters, tangents, and cyclic polygons with live angle measurements:
+
+![Thales Circle Geometry and Inscribed Right Angle](docs/images/thales_circle_workstation.png)
+
+#### 5. Version Control & Semantic Proof State Diff
+Unlike traditional Git diffs that only track lines of text, Proofer's version control computes mathematical state transitions across commits:
+
+![Version Control with Proof State Diff](docs/images/vcs_drawer_live.png)
+
+#### 6. Keyboard-First Command Palette (`⌘K` / `Ctrl+K`)
+Quickly search and jump to theorems, trigger kernel re-verification, toggle workstation layouts, or synthesize next steps:
+
+![Command Palette](docs/images/command_palette.png)
+
+#### 7. Native VS Code Extension & Language Server (LSP)
+The Proofer extension provides side-by-side editing, syntax highlighting, hover documentation, and companion CAD rendering directly in VS Code:
+
+![Proofer VS Code Extension](docs/images/vscode_lsp_sidebyside.png)
 
 ---
 

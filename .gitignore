@@ -45,5 +45,5 @@ benchmark_performance.cjs
 *architecture*.md
 *Architecture*.md
 *ARCHITECTURE*.md
-docs/AGENTS.md
-docs/ARCHITECTURE.md
+docs/*.md
+!docs/README.md

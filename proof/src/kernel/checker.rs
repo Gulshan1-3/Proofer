@@ -400,12 +400,200 @@ impl<'a> Checker<'a> {
                         }
                         Ok(conclusion)
                     }
-                    "AngleSum180" | "TriangleAngleSum" | "VerticalAngles" | "AlternateInteriorAngles" | "MidpointBisects"
-                    | "InscribedAngle" | "Thales" | "CyclicQuad" | "CyclicOppositeAngles"
-                    | "ParallelogramOppSides" | "OppositeSidesEqual"
-                    | "CongruentTrianglesSSS" | "TangentPerpendicularRadius" | "RhombusDiagonals"
-                    | "ModusPonens" | "DoubleNegation" | "AndEliminationLeft" => {
-                        Ok(conclusion)
+                    "ModusPonens" => {
+                        let valid = match premise_props.as_slice() {
+                            [KProp::And(p, imp)] => {
+                                match &**imp {
+                                    KProp::Implies(p_arg, q) if **p == **p_arg => *q.clone() == conclusion,
+                                    _ => false,
+                                }
+                            }
+                            [p, KProp::Implies(p_arg, q)] if p == &**p_arg => *q.clone() == conclusion,
+                            [KProp::Implies(p_arg, q), p] if p == &**p_arg => *q.clone() == conclusion,
+                            _ => false,
+                        };
+                        if valid {
+                            Ok(conclusion)
+                        } else {
+                            Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "ModusPonens premises do not derive the claimed conclusion".into(),
+                            })
+                        }
+                    }
+                    "DoubleNegation" => {
+                        match premise_props.as_slice() {
+                            [KProp::Not(inner)] => {
+                                match &**inner {
+                                    KProp::Not(p) if **p == conclusion => Ok(conclusion),
+                                    _ => Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "DoubleNegation requires premise of form ¬¬P matching conclusion".into(),
+                                    }),
+                                }
+                            }
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "DoubleNegation requires exactly 1 negation premise".into(),
+                            }),
+                        }
+                    }
+                    "AndEliminationLeft" => {
+                        match premise_props.as_slice() {
+                            [KProp::And(left, _)] if **left == conclusion => Ok(conclusion),
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "AndEliminationLeft requires premise P ∧ Q where P matches conclusion".into(),
+                            }),
+                        }
+                    }
+                    "Thales" | "InscribedAngle" => {
+                        if premise_props.is_empty() {
+                            return Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "Thales/InscribedAngle requires at least 1 premise".into(),
+                            });
+                        }
+                        match &conclusion {
+                            KProp::Eq(lhs, _) => {
+                                let s = lhs.to_string();
+                                if s.contains("angle") || s.starts_with('∠') {
+                                    Ok(conclusion)
+                                } else {
+                                    Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "InscribedAngle conclusion must equate an angle".into(),
+                                    })
+                                }
+                            }
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "InscribedAngle conclusion must be an angle equality".into(),
+                            }),
+                        }
+                    }
+                    "TriangleAngleSum" | "AngleSum180" => {
+                        match &conclusion {
+                            KProp::Eq(lhs, rhs) => {
+                                let lhs_s = lhs.to_string();
+                                let rhs_s = rhs.to_string();
+                                if rhs_s == "180" || rhs_s.ends_with("deg") || rhs_s.ends_with("°") || lhs_s.contains("angle") || lhs_s.starts_with('∠') {
+                                    Ok(conclusion)
+                                } else {
+                                    Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "TriangleAngleSum conclusion must equate angles or angle measures".into(),
+                                    })
+                                }
+                            }
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "TriangleAngleSum conclusion must be an angle equality".into(),
+                            }),
+                        }
+                    }
+                    "CyclicQuad" | "CyclicOppositeAngles" => {
+                        if premise_props.is_empty() {
+                            return Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "CyclicQuad requires at least 1 premise".into(),
+                            });
+                        }
+                        match &conclusion {
+                            KProp::Eq(..) => Ok(conclusion),
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "CyclicQuad conclusion must be angle sum equality".into(),
+                            }),
+                        }
+                    }
+                    "ParallelogramOppSides" | "OppositeSidesEqual" => {
+                        if premise_props.is_empty() {
+                            return Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "ParallelogramOppSides requires at least 1 premise".into(),
+                            });
+                        }
+                        match &conclusion {
+                            KProp::And(..) | KProp::Eq(..) => Ok(conclusion),
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "ParallelogramOppSides conclusion must be equality or conjunction of side equalities".into(),
+                            }),
+                        }
+                    }
+                    "RhombusDiagonals" | "TangentPerpendicularRadius" => {
+                        if premise_props.is_empty() {
+                            return Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "Rule requires at least 1 premise".into(),
+                            });
+                        }
+                        match &conclusion {
+                            KProp::Atom(rel, _) if rel == "perpendicular" => Ok(conclusion),
+                            KProp::Eq(..) => Ok(conclusion),
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "Conclusion must establish perpendicular relation".into(),
+                            }),
+                        }
+                    }
+                    "MidpointBisects" => {
+                        if premise_props.is_empty() {
+                            return Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "MidpointBisects requires at least 1 premise".into(),
+                            });
+                        }
+                        match &conclusion {
+                            KProp::Atom(rel, _) if rel == "parallel" => Ok(conclusion),
+                            KProp::Eq(..) => Ok(conclusion),
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "MidpointBisects conclusion must be parallel relation or equality".into(),
+                            }),
+                        }
+                    }
+                    "CongruentTrianglesSSS" => {
+                        if premise_props.is_empty() {
+                            return Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "CongruentTrianglesSSS requires at least 1 premise".into(),
+                            });
+                        }
+                        match &conclusion {
+                            KProp::Atom(rel, _) if rel == "congruent" => Ok(conclusion),
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "CongruentTrianglesSSS conclusion must establish congruence".into(),
+                            }),
+                        }
+                    }
+                    "VerticalAngles" | "AlternateInteriorAngles" => {
+                        if premise_props.is_empty() {
+                            return Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "Rule requires at least 1 premise".into(),
+                            });
+                        }
+                        match &conclusion {
+                            KProp::Eq(lhs, rhs) => {
+                                let l = lhs.to_string();
+                                let r = rhs.to_string();
+                                if (l.contains("angle") || l.starts_with('∠')) && (r.contains("angle") || r.starts_with('∠')) {
+                                    Ok(conclusion)
+                                } else {
+                                    Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "Conclusion must equate two angles".into(),
+                                    })
+                                }
+                            }
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "Conclusion must be an equality between angles".into(),
+                            }),
+                        }
                     }
                     _ => {
                         Err(CheckError::InvalidGeoCertificate {

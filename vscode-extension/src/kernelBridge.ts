@@ -207,24 +207,28 @@ export class KernelBridge {
       return customPath;
     }
 
-    // Check workspace folders
-    if (vscode.workspace.workspaceFolders) {
+    // Security: Only search workspace folders if the workspace is explicitly trusted by the user
+    const isTrusted = vscode.workspace.isTrusted;
+    if (isTrusted && vscode.workspace.workspaceFolders) {
       for (const folder of vscode.workspace.workspaceFolders) {
         const releasePath = path.join(folder.uri.fsPath, 'proof', 'target', 'release', 'proof');
         if (fs.existsSync(releasePath)) return releasePath;
+
+        const debugPath = path.join(folder.uri.fsPath, 'proof', 'target', 'debug', 'proof');
+        if (fs.existsSync(debugPath)) return debugPath;
 
         const rootRelease = path.join(folder.uri.fsPath, 'target', 'release', 'proof');
         if (fs.existsSync(rootRelease)) return rootRelease;
       }
     }
 
-    // Check standard locations
-    const knownPaths = [
-      '/home/gulshansharma/Proofer/proof/target/release/proof',
-      '/home/gulshansharma/Proofer/proof/target/debug/proof',
-    ];
-    for (const p of knownPaths) {
-      if (fs.existsSync(p)) return p;
+    // Check system PATH
+    const isWin = process.platform === 'win32';
+    const binName = isWin ? 'proof.exe' : 'proof';
+    const pathEnv = process.env.PATH || '';
+    for (const dir of pathEnv.split(path.delimiter)) {
+      const candidate = path.join(dir, binName);
+      if (fs.existsSync(candidate)) return candidate;
     }
 
     return null;
@@ -320,14 +324,16 @@ export class KernelBridge {
           return;
         }
 
-        const tmpFile = path.join(require('os').tmpdir(), `proofer_synth_${Date.now()}.proof`);
-        fs.writeFileSync(tmpFile, code);
+        const os = require('os');
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'proofer-synth-'));
+        const tmpFile = path.join(tmpDir, 'synth.proof');
+        fs.writeFileSync(tmpFile, code, { mode: 0o600 });
 
         const proc = spawn(binPath, ['synthesize', tmpFile]);
         let stdout = '';
         proc.stdout.on('data', chunk => stdout += chunk);
         proc.on('close', () => {
-          try { fs.unlinkSync(tmpFile); } catch (_) {}
+          try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
           // Parse CLI output lines
           const stepMatch = stdout.match(/Synthesized Step \(Kernel Verified: (true|false)\):\s*\n\s*(.+)/);
           if (stepMatch) {

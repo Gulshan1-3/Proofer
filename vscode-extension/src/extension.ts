@@ -225,9 +225,11 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       const rootPath = folders[0].uri.fsPath;
+      // Sanitize rootPath for shell execution to prevent command injection
+      const sanitizedPath = rootPath.replace(/'/g, "'\\''");
       const terminal = vscode.window.createTerminal('Proofer Build');
       terminal.show();
-      terminal.sendText(`proof build "${rootPath}"`);
+      terminal.sendText(`proof build '${sanitizedPath}'`);
     })
   );
 

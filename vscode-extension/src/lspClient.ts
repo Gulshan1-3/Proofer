@@ -9,14 +9,16 @@ import {
 
 let client: LanguageClient | null = null;
 
-export function findCliBinary(): string {
+export function findCliBinary(): string | null {
   const config = vscode.workspace.getConfiguration('proofer');
   const customPath = config.get<string>('executablePath');
   if (customPath && fs.existsSync(customPath)) {
     return customPath;
   }
 
-  if (vscode.workspace.workspaceFolders) {
+  // Security: Only search workspace folders if the workspace is explicitly trusted by the user
+  const isTrusted = vscode.workspace.isTrusted;
+  if (isTrusted && vscode.workspace.workspaceFolders) {
     for (const folder of vscode.workspace.workspaceFolders) {
       const releasePath = path.join(folder.uri.fsPath, 'proof', 'target', 'release', 'proof');
       if (fs.existsSync(releasePath)) return releasePath;
@@ -29,14 +31,26 @@ export function findCliBinary(): string {
     }
   }
 
-  return '/home/gulshansharma/Proofer/proof/target/release/proof';
+  // Check system PATH
+  const isWin = process.platform === 'win32';
+  const binName = isWin ? 'proof.exe' : 'proof';
+  const pathEnv = process.env.PATH || '';
+  for (const dir of pathEnv.split(path.delimiter)) {
+    const candidate = path.join(dir, binName);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  return null;
 }
 
 export function startLspClient(
   _context: vscode.ExtensionContext,
   onWorkstationUpdate: (uri: string, verification: any) => void
-): LanguageClient {
+): LanguageClient | null {
   const command = findCliBinary();
+  if (!command) {
+    return null;
+  }
 
   const serverOptions: ServerOptions = {
     command,

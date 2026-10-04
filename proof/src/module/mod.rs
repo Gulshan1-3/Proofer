@@ -70,12 +70,21 @@ impl ModuleLoader {
             return Ok(src.clone());
         }
 
+        // Validate module identifier to prevent directory traversal
+        if module_name.contains("..") || module_name.starts_with('/') || module_name.contains('\\') || module_name.contains('\0') {
+            return Err(ModuleError::FileNotFound(PathBuf::from(format!("Invalid module path '{}'", module_name))));
+        }
+
         let rel_path = PathBuf::from(module_name.replace('.', "/")).with_extension("proof");
         for base in &self.base_dirs {
             let full_path = base.join(&rel_path);
-            if full_path.exists() {
-                return std::fs::read_to_string(&full_path)
-                    .map_err(|_| ModuleError::FileNotFound(full_path));
+            if let Ok(canon_full) = full_path.canonicalize() {
+                if let Ok(canon_base) = base.canonicalize() {
+                    if canon_full.starts_with(&canon_base) && canon_full.is_file() {
+                        return std::fs::read_to_string(&canon_full)
+                            .map_err(|_| ModuleError::FileNotFound(canon_full));
+                    }
+                }
             }
         }
 

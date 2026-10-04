@@ -4,8 +4,45 @@ use std::io::{Read, Write, BufRead, BufReader};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 
+fn extract_json_string_field(json: &str, field: &str) -> Option<String> {
+    let key = format!("\"{}\"", field);
+    let key_pos = json.find(&key)?;
+    let after_key = &json[key_pos + key.len()..];
+    let colon_pos = after_key.find(':')?;
+    let after_colon = after_key[colon_pos + 1..].trim_start();
+    if !after_colon.starts_with('"') {
+        return None;
+    }
+    let chars = after_colon[1..].chars();
+    let mut result = String::new();
+    let mut escaped = false;
+    for c in chars {
+        if escaped {
+            match c {
+                'n' => result.push('\n'),
+                'r' => result.push('\r'),
+                't' => result.push('\t'),
+                '\\' => result.push('\\'),
+                '"' => result.push('"'),
+                _ => {
+                    result.push('\\');
+                    result.push(c);
+                }
+            }
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+        } else if c == '"' {
+            return Some(result);
+        } else {
+            result.push(c);
+        }
+    }
+    None
+}
+
 fn handle_client(mut stream: TcpStream) {
-    let mut buffer = [0; 16384];
+    let mut buffer = [0; 65536];
     let bytes_read = match stream.read(&mut buffer) {
         Ok(n) if n > 0 => n,
         _ => return,
@@ -28,23 +65,9 @@ fn handle_client(mut stream: TcpStream) {
 
         let code = if let Some(body_start) = request.find("\r\n\r\n") {
             let body = &request[body_start + 4..];
-            if let Some(code_pos) = body.find("\"code\":") {
-                let rest = &body[code_pos + 7..];
-                if let Some(start_quote) = rest.find('\"') {
-                    let rest_quote = &rest[start_quote + 1..];
-                    if let Some(end_quote) = rest_quote.find('\"') {
-                        rest_quote[..end_quote].replace("\\n", "\n").replace("\\\"", "\"")
-                    } else {
-                        body.to_string()
-                    }
-                } else {
-                    body.to_string()
-                }
-            } else {
-                body.to_string()
-            }
+            extract_json_string_field(body, "code").unwrap_or_else(|| body.to_string())
         } else {
-            "".to_string()
+            String::new()
         };
 
         let result_json = if is_synthesize {
@@ -70,48 +93,81 @@ fn handle_client(mut stream: TcpStream) {
         return;
     }
 
-    // Serve frontend static files
+    // Serve frontend static files safely
     if request.starts_with("GET") {
         let first_line = request.lines().next().unwrap_or("");
-        let mut path = "/";
+        let mut req_path = "/";
         let parts: Vec<&str> = first_line.split_whitespace().collect();
         if parts.len() >= 2 {
-            path = parts[1];
+            req_path = parts[1];
         }
 
-        let clean_path = if path == "/" {
+        // Clean query parameters and fragments
+        let clean_url = req_path.split('?').next().unwrap_or("").split('#').next().unwrap_or("");
+
+        // Defense-in-depth: Immediately reject path traversal attempts
+        if clean_url.contains("..") || clean_url.contains('\0') || clean_url.contains('\\') {
+            let forbidden = "HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\n403 Forbidden: Invalid Path";
+            let _ = stream.write_all(forbidden.as_bytes());
+            return;
+        }
+
+        let rel_path = if clean_url == "/" || clean_url.is_empty() {
             "index.html"
         } else {
-            path.trim_start_matches('/')
+            clean_url.trim_start_matches('/')
         };
 
-        let file_content = std::fs::read(std::path::Path::new("static").join(clean_path))
-            .or_else(|_| std::fs::read(std::path::Path::new("proof/static").join(clean_path)))
-            .or_else(|_| std::fs::read("static/index.html"))
-            .or_else(|_| std::fs::read("proof/static/index.html"));
+        // Allowed static search directories
+        let static_roots = [
+            std::path::PathBuf::from("static"),
+            std::path::PathBuf::from("proof/static"),
+        ];
 
-        if let Ok(bytes) = file_content {
-            let content_type = if clean_path.ends_with(".html") || path == "/" {
-                "text/html; charset=utf-8"
-            } else if clean_path.ends_with(".js") {
-                "application/javascript; charset=utf-8"
-            } else if clean_path.ends_with(".css") {
-                "text/css; charset=utf-8"
-            } else if clean_path.ends_with(".svg") {
-                "image/svg+xml"
-            } else if clean_path.ends_with(".wasm") {
-                "application/wasm"
-            } else {
-                "application/octet-stream"
-            };
+        let mut served = false;
+        for root in &static_roots {
+            if let Ok(canonical_root) = root.canonicalize() {
+                let candidate = canonical_root.join(rel_path);
+                if let Ok(canonical_candidate) = candidate.canonicalize() {
+                    // Strict boundary check: file must be inside canonical root
+                    if canonical_candidate.starts_with(&canonical_root) && canonical_candidate.is_file() {
+                        if let Ok(bytes) = std::fs::read(&canonical_candidate) {
+                            let content_type = if rel_path.ends_with(".html") {
+                                "text/html; charset=utf-8"
+                            } else if rel_path.ends_with(".js") {
+                                "application/javascript; charset=utf-8"
+                            } else if rel_path.ends_with(".css") {
+                                "text/css; charset=utf-8"
+                            } else if rel_path.ends_with(".svg") {
+                                "image/svg+xml"
+                            } else if rel_path.ends_with(".wasm") {
+                                "application/wasm"
+                            } else {
+                                "application/octet-stream"
+                            };
 
-            let header = format!(
-                "HTTP/1.1 200 OK\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n",
-                content_type,
-                bytes.len()
-            );
-            let _ = stream.write_all(header.as_bytes());
-            let _ = stream.write_all(&bytes);
+                            let header = format!(
+                                "HTTP/1.1 200 OK\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n",
+                                content_type,
+                                bytes.len()
+                            );
+                            let _ = stream.write_all(header.as_bytes());
+                            let _ = stream.write_all(&bytes);
+                            served = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if served {
+            return;
+        }
+
+        if clean_url != "/" {
+            let not_found = "HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\n404 Not Found";
+            let _ = stream.write_all(not_found.as_bytes());
             return;
         }
     }
@@ -179,21 +235,8 @@ fn main() {
                     }
                     let trimmed = line.trim();
                     if !trimmed.is_empty() {
-                        let code = if let Some(code_pos) = trimmed.find("\"code\":") {
-                            let rest = &trimmed[code_pos + 7..];
-                            if let Some(start_quote) = rest.find('\"') {
-                                let rest_quote = &rest[start_quote + 1..];
-                                if let Some(end_quote) = rest_quote.find('\"') {
-                                    rest_quote[..end_quote].replace("\\n", "\n").replace("\\\"", "\"")
-                                } else {
-                                    trimmed.to_string()
-                                }
-                            } else {
-                                trimmed.to_string()
-                            }
-                        } else {
-                            trimmed.to_string()
-                        };
+                        let code = extract_json_string_field(trimmed, "code")
+                            .unwrap_or_else(|| trimmed.to_string());
 
                         let result = process_proof_request(&code);
                         let _ = writeln!(writer, "{}", result);

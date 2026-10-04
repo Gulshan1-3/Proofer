@@ -7,10 +7,13 @@ use crate::{
 };
 use crate::ast::Theorem;
 
+pub const MAX_RECURSION_DEPTH: usize = 128;
+
 pub struct Parser<'a> {
     tokens: Vec<Token<'a>>,
     cursor: usize,
     diagnostics: Vec<Diagnostic>,
+    recursion_depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -32,6 +35,7 @@ impl<'a> Parser<'a> {
             tokens,
             cursor: 0,
             diagnostics: Vec::new(),
+            recursion_depth: 0,
         }
     }
 
@@ -534,7 +538,18 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_proposition(&mut self) -> Result<Proposition, Diagnostic> {
-        self.parse_prop_quantifier()
+        if self.recursion_depth >= MAX_RECURSION_DEPTH {
+            let diag = Diagnostic::error(
+                format!("Maximum recursion depth ({}) exceeded: expression is nested too deeply", MAX_RECURSION_DEPTH),
+                self.peek_span(),
+            );
+            self.diagnostics.push(diag.clone());
+            return Err(diag);
+        }
+        self.recursion_depth += 1;
+        let res = self.parse_prop_quantifier();
+        self.recursion_depth -= 1;
+        res
     }
 
     // 1. Quantifiers: ∀x : T, P / ∃x : T, P
@@ -727,7 +742,18 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_term(&mut self) -> Result<Term, Diagnostic> {
-        self.parse_term_additive()
+        if self.recursion_depth >= MAX_RECURSION_DEPTH {
+            let diag = Diagnostic::error(
+                format!("Maximum recursion depth ({}) exceeded: term is nested too deeply", MAX_RECURSION_DEPTH),
+                self.peek_span(),
+            );
+            self.diagnostics.push(diag.clone());
+            return Err(diag);
+        }
+        self.recursion_depth += 1;
+        let res = self.parse_term_additive();
+        self.recursion_depth -= 1;
+        res
     }
 
     fn parse_term_additive(&mut self) -> Result<Term, Diagnostic> {

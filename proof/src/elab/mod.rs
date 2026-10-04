@@ -276,16 +276,27 @@ impl ProofBuilder {
                 let kprop = lower_prop(prop);
 
                 if from_facts.is_empty() {
-                    self.ctx.add_fact(*fact, kprop.clone());
-                    let nid = self.push_node(ProofNode::Assumption(*fact));
-                    self.fact_nodes.insert(*fact, nid);
-                    self.fact_props.insert(*fact, kprop);
+                    return Err(ElabError::UnsupportedStep {
+                        desc: format!("'have' step without 'from' premises or justification is unsound"),
+                        span: step.span,
+                    });
                 } else if from_facts.len() == 1 {
                     let src_fact = from_facts[0];
                     if let Some(&src_nid) = self.fact_nodes.get(&src_fact) {
-                        self.ctx.add_fact(*fact, kprop.clone());
-                        let nid = self.push_node(ProofNode::Assumption(*fact));
-                        self.fact_nodes.insert(*fact, nid);
+                        let src_prop = self.fact_props.get(&src_fact).ok_or_else(|| ElabError::UnknownFact {
+                            name: format!("fact#{}", src_fact.0),
+                            span: step.span,
+                        })?;
+                        if src_prop != &kprop {
+                            return Err(ElabError::KernelRejected {
+                                theorem: "deduction".into(),
+                                error: CheckError::PremiseMismatch {
+                                    expected: kprop.clone(),
+                                    got: src_prop.clone(),
+                                },
+                            });
+                        }
+                        self.fact_nodes.insert(*fact, src_nid);
                         self.fact_props.insert(*fact, kprop);
                         self.last_node = Some(src_nid);
                     } else {
@@ -310,25 +321,43 @@ impl ProofBuilder {
                     let p2 = self.fact_props.get(&f2).cloned();
 
                     let mp_node = match (p1, p2) {
-                        (Some(KProp::Implies(prem, _)), Some(arg)) if *prem == arg => {
+                        (Some(KProp::Implies(prem, concl)), Some(arg)) if *prem == arg => {
+                            if *concl != kprop {
+                                return Err(ElabError::KernelRejected {
+                                    theorem: "modus_ponens".into(),
+                                    error: CheckError::PremiseMismatch { expected: kprop, got: *concl },
+                                });
+                            }
                             ProofNode::ImpElim { imp: n1, arg: n2 }
                         }
-                        (Some(arg), Some(KProp::Implies(prem, _))) if *prem == arg => {
+                        (Some(arg), Some(KProp::Implies(prem, concl))) if *prem == arg => {
+                            if *concl != kprop {
+                                return Err(ElabError::KernelRejected {
+                                    theorem: "modus_ponens".into(),
+                                    error: CheckError::PremiseMismatch { expected: kprop, got: *concl },
+                                });
+                            }
                             ProofNode::ImpElim { imp: n2, arg: n1 }
                         }
-                        _ => {
+                        (Some(l), Some(r)) if kprop == KProp::And(Box::new(l.clone()), Box::new(r.clone())) => {
                             ProofNode::AndIntro { left: n1, right: n2 }
+                        }
+                        _ => {
+                            return Err(ElabError::UnsupportedStep {
+                                desc: format!("Cannot deduce conclusion from specified premises"),
+                                span: step.span,
+                            });
                         }
                     };
                     let nid = self.push_node(mp_node);
                     self.fact_nodes.insert(*fact, nid);
-                    self.fact_props.insert(*fact, kprop.clone());
-                    self.ctx.add_fact(*fact, kprop);
-                } else {
-                    self.ctx.add_fact(*fact, kprop.clone());
-                    let nid = self.push_node(ProofNode::Assumption(*fact));
-                    self.fact_nodes.insert(*fact, nid);
                     self.fact_props.insert(*fact, kprop);
+                    self.last_node = Some(nid);
+                } else {
+                    return Err(ElabError::UnsupportedStep {
+                        desc: format!("Unsupported premise count for 'have' step"),
+                        span: step.span,
+                    });
                 }
                 Ok(())
             }
@@ -341,6 +370,18 @@ impl ProofBuilder {
                 } else if from_facts.len() == 1 {
                     let src_fact = from_facts[0];
                     if let Some(&src_nid) = self.fact_nodes.get(&src_fact) {
+                        let src_prop = self.fact_props.get(&src_fact);
+                        if let Some(p) = src_prop {
+                            if p != &kprop {
+                                return Err(ElabError::KernelRejected {
+                                    theorem: "deduction".into(),
+                                    error: CheckError::ConclusionMismatch {
+                                        claimed: kprop,
+                                        proven: p.clone(),
+                                    },
+                                });
+                            }
+                        }
                         self.last_node = Some(src_nid);
                     } else {
                         return Err(ElabError::UnknownFact {
@@ -403,7 +444,6 @@ impl ProofBuilder {
                 let nid = self.push_node(cert_node);
                 self.fact_nodes.insert(*fact, nid);
                 self.fact_props.insert(*fact, kprop.clone());
-                self.ctx.add_fact(*fact, kprop);
                 Ok(())
             }
 

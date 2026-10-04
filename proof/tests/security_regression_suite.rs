@@ -180,3 +180,27 @@ fn test_json_str_escapes_all_control_characters() {
     assert!(json.contains("\\u001f"));
 }
 
+#[test]
+fn test_extract_json_string_field_resists_substring_collision() {
+    let raw_json = r#"{"description": "Here is a sample payload with \"code\": \"fake_injected_code\"", "code": "real theorem body"}"#;
+    let extracted = proof::api::extract_json_string_field(raw_json, "code");
+    assert_eq!(extracted.as_deref(), Some("real theorem body"),
+        "JSON field extractor must not match substring keys inside earlier string values");
+}
+
+#[test]
+fn test_package_create_sanitizes_toml_injection() {
+    let tmp_dir = std::env::temp_dir().join(format!("proofer_test_{}", std::process::id()));
+    let malicious_name = "test_proj\"\nevil = true\n[injected_section]\nhacked = true\n#";
+    let res = proof::package::PackageManager::create_project(&tmp_dir, malicious_name);
+    assert!(res.is_ok());
+
+    let manifest_path = tmp_dir.join("proof.toml");
+    let content = std::fs::read_to_string(&manifest_path).expect("Read proof.toml");
+    assert!(!content.contains("[injected_section]"), "Must not allow arbitrary TOML section injection");
+    assert!(!content.contains("hacked = true"), "Must not allow arbitrary TOML key injection");
+
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+

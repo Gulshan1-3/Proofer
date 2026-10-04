@@ -1,74 +1,103 @@
-use proof::api::process_proof_request;
+use proof::api::{process_proof_request, extract_json_string_field};
 use proof::incremental::IncrementalEngine;
 use std::io::{Read, Write, BufRead, BufReader};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 
-fn extract_json_string_field(json: &str, field: &str) -> Option<String> {
-    let key = format!("\"{}\"", field);
-    let key_pos = json.find(&key)?;
-    let after_key = &json[key_pos + key.len()..];
-    let colon_pos = after_key.find(':')?;
-    let after_colon = after_key[colon_pos + 1..].trim_start();
-    if !after_colon.starts_with('"') {
-        return None;
-    }
-    let chars = after_colon[1..].chars();
-    let mut result = String::new();
-    let mut escaped = false;
-    for c in chars {
-        if escaped {
-            match c {
-                'n' => result.push('\n'),
-                'r' => result.push('\r'),
-                't' => result.push('\t'),
-                '\\' => result.push('\\'),
-                '"' => result.push('"'),
-                _ => {
-                    result.push('\\');
-                    result.push(c);
-                }
+fn is_allowed_origin(origin: &str) -> bool {
+    let lower = origin.trim().to_ascii_lowercase();
+    lower.starts_with("http://localhost:")
+        || lower.starts_with("http://127.0.0.1:")
+        || lower == "http://localhost"
+        || lower == "http://127.0.0.1"
+        || lower.starts_with("https://localhost:")
+        || lower.starts_with("https://127.0.0.1:")
+        || lower.starts_with("tauri://")
+        || lower.starts_with("https://tauri.localhost")
+        || lower.starts_with("vscode-webview://")
+}
+
+fn read_http_request(stream: &mut TcpStream) -> Result<(String, String), std::io::Error> {
+    let mut buffer = Vec::with_capacity(4096);
+    let mut chunk = [0u8; 4096];
+
+    let header_end = loop {
+        if let Some(pos) = buffer.windows(4).position(|w| w == b"\r\n\r\n") {
+            break pos + 4;
+        }
+        let n = stream.read(&mut chunk)?;
+        if n == 0 {
+            return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Client disconnected"));
+        }
+        buffer.extend_from_slice(&chunk[..n]);
+        if buffer.len() > 65536 {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "HTTP headers exceed 64KB limit"));
+        }
+    };
+
+    let header_str = String::from_utf8_lossy(&buffer[..header_end]).to_string();
+    let mut content_length = 0;
+    for line in header_str.lines() {
+        if line.to_ascii_lowercase().starts_with("content-length:") {
+            if let Some(val_str) = line.split(':').nth(1) {
+                content_length = val_str.trim().parse::<usize>().unwrap_or(0);
             }
-            escaped = false;
-        } else if c == '\\' {
-            escaped = true;
-        } else if c == '"' {
-            return Some(result);
-        } else {
-            result.push(c);
         }
     }
-    None
+
+    const MAX_BODY: usize = 10 * 1024 * 1024; // 10MB limit
+    if content_length > MAX_BODY {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Body too large"));
+    }
+
+    let already_read_body = buffer.len() - header_end;
+    if already_read_body < content_length {
+        let remaining = content_length - already_read_body;
+        let mut remaining_buf = vec![0u8; remaining];
+        stream.read_exact(&mut remaining_buf)?;
+        buffer.extend_from_slice(&remaining_buf);
+    }
+
+    let body_str = String::from_utf8_lossy(&buffer[header_end..header_end + content_length]).to_string();
+    Ok((header_str, body_str))
 }
 
 fn handle_client(mut stream: TcpStream) {
-    let mut buffer = [0; 65536];
-    let bytes_read = match stream.read(&mut buffer) {
-        Ok(n) if n > 0 => n,
-        _ => return,
+    let (headers, body) = match read_http_request(&mut stream) {
+        Ok(res) => res,
+        Err(_) => return,
     };
 
-    let request = String::from_utf8_lossy(&buffer[..bytes_read]);
+    let origin = headers.lines().find_map(|l| {
+        if l.to_ascii_lowercase().starts_with("origin:") {
+            Some(l[7..].trim().to_string())
+        } else {
+            None
+        }
+    });
+
+    let cors_header = match &origin {
+        Some(o) if is_allowed_origin(o) => format!("Access-Control-Allow-Origin: {}\r\nVary: Origin\r\n", o),
+        _ => String::new(),
+    };
 
     // Handle CORS preflight
-    if request.starts_with("OPTIONS") {
-        let response = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n";
+    if headers.starts_with("OPTIONS") {
+        let response = format!(
+            "HTTP/1.1 204 No Content\r\n{}Access-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n",
+            cors_header
+        );
         let _ = stream.write_all(response.as_bytes());
         return;
     }
 
     // Handle POST verification or synthesis request
-    if request.starts_with("POST") {
-        let is_synthesize = request.starts_with("POST /api/synthesize")
-            || request.contains("\"action\":\"synthesize\"")
-            || request.contains("\"synthesize\":true");
+    if headers.starts_with("POST") {
+        let is_synthesize = headers.starts_with("POST /api/synthesize")
+            || body.contains("\"action\":\"synthesize\"")
+            || body.contains("\"synthesize\":true");
 
-        let code = if let Some(body_start) = request.find("\r\n\r\n") {
-            let body = &request[body_start + 4..];
-            extract_json_string_field(body, "code").unwrap_or_else(|| body.to_string())
-        } else {
-            String::new()
-        };
+        let code = extract_json_string_field(&body, "code").unwrap_or_else(|| body.clone());
 
         let result_json = if is_synthesize {
             let step = proof::synthesizer::ProofSynthesizer::infill_next_step(&code);
@@ -85,7 +114,8 @@ fn handle_client(mut stream: TcpStream) {
         };
 
         let response = format!(
-            "HTTP/1.1 200 OK\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nConnection: close\r\n{}Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            cors_header,
             result_json.len(),
             result_json
         );
@@ -94,8 +124,8 @@ fn handle_client(mut stream: TcpStream) {
     }
 
     // Serve frontend static files safely
-    if request.starts_with("GET") {
-        let first_line = request.lines().next().unwrap_or("");
+    if headers.starts_with("GET") {
+        let first_line = headers.lines().next().unwrap_or("");
         let mut req_path = "/";
         let parts: Vec<&str> = first_line.split_whitespace().collect();
         if parts.len() >= 2 {

@@ -26,6 +26,153 @@ pub fn json_str(s: &str) -> String {
     out
 }
 
+/// Robust JSON string field extractor that handles nested strings and escape sequences
+pub fn extract_json_string_field(json: &str, target_field: &str) -> Option<String> {
+    let mut chars = json.char_indices().peekable();
+
+    // Find opening '{'
+    while let Some((_, c)) = chars.next() {
+        if c == '{' {
+            break;
+        }
+    }
+
+    loop {
+        // Skip whitespace and commas
+        while let Some(&(_, c)) = chars.peek() {
+            if c.is_whitespace() || c == ',' {
+                chars.next();
+            } else {
+                break;
+            }
+        }
+
+        // Read key
+        let key = match chars.next() {
+            Some((_, '"')) => {
+                let mut k = String::new();
+                let mut esc = false;
+                while let Some((_, c)) = chars.next() {
+                    if esc {
+                        k.push(c);
+                        esc = false;
+                    } else if c == '\\' {
+                        esc = true;
+                    } else if c == '"' {
+                        break;
+                    } else {
+                        k.push(c);
+                    }
+                }
+                k
+            }
+            _ => return None,
+        };
+
+        // Skip until ':'
+        while let Some((_, c)) = chars.next() {
+            if c == ':' {
+                break;
+            }
+        }
+
+        // Skip whitespace
+        while let Some(&(_, c)) = chars.peek() {
+            if c.is_whitespace() {
+                chars.next();
+            } else {
+                break;
+            }
+        }
+
+        if key == target_field {
+            // Read target string value
+            match chars.next() {
+                Some((_, '"')) => {
+                    let mut val = String::new();
+                    let mut esc = false;
+                    while let Some((_, c)) = chars.next() {
+                        if esc {
+                            match c {
+                                'n' => val.push('\n'),
+                                'r' => val.push('\r'),
+                                't' => val.push('\t'),
+                                '\\' => val.push('\\'),
+                                '"' => val.push('"'),
+                                _ => {
+                                    val.push('\\');
+                                    val.push(c);
+                                }
+                            }
+                            esc = false;
+                        } else if c == '\\' {
+                            esc = true;
+                        } else if c == '"' {
+                            return Some(val);
+                        } else {
+                            val.push(c);
+                        }
+                    }
+                    return None;
+                }
+                _ => return None,
+            }
+        } else {
+            // Skip non-target value
+            match chars.peek() {
+                Some(&(_, '"')) => {
+                    chars.next();
+                    let mut esc = false;
+                    while let Some((_, c)) = chars.next() {
+                        if esc {
+                            esc = false;
+                        } else if c == '\\' {
+                            esc = true;
+                        } else if c == '"' {
+                            break;
+                        }
+                    }
+                }
+                Some(&(_, '{')) | Some(&(_, '[')) => {
+                    let (_, open_c) = chars.next().unwrap();
+                    let close_c = if open_c == '{' { '}' } else { ']' };
+                    let mut depth = 1;
+                    let mut in_str = false;
+                    let mut esc = false;
+                    while let Some((_, c)) = chars.next() {
+                        if in_str {
+                            if esc {
+                                esc = false;
+                            } else if c == '\\' {
+                                esc = true;
+                            } else if c == '"' {
+                                in_str = false;
+                            }
+                        } else if c == '"' {
+                            in_str = true;
+                        } else if c == open_c {
+                            depth += 1;
+                        } else if c == close_c {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    while let Some(&(_, c)) = chars.peek() {
+                        if c == ',' || c == '}' {
+                            break;
+                        }
+                        chars.next();
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Verification payload returned according to enterprise editor specification.
 pub fn process_proof_request(code: &str) -> String {
     let mut parser = Parser::new(code);

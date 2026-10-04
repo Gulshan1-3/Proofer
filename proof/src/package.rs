@@ -138,6 +138,9 @@ impl PackageManager {
         let src_dir = target_dir.join("src");
         fs::create_dir_all(&src_dir)?;
 
+        let safe_name_owned: String = name.chars().filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-').collect();
+        let safe_name = if safe_name_owned.is_empty() { "proof_project" } else { &safe_name_owned };
+
         // 1. proof.toml
         let manifest_content = format!(
 r#"[package]
@@ -150,7 +153,7 @@ description = "Formal proofs verified with Proofer"
 [dependencies]
 # mathlib = "../mathlib"
 "#,
-            name
+            safe_name
         );
         fs::write(target_dir.join("proof.toml"), manifest_content)?;
 

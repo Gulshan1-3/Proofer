@@ -61,10 +61,11 @@ export class ProoferCustomEditorProvider implements vscode.CustomTextEditorProvi
     webviewPanel.webview.onDidReceiveMessage(e => {
       switch (e.type) {
         case 'edit': {
-          const edit = new vscode.WorkspaceEdit();
+          const lastLine = Math.max(0, document.lineCount - 1);
+          const lastChar = document.lineCount > 0 ? document.lineAt(lastLine).text.length : 0;
           edit.replace(
             document.uri,
-            new vscode.Range(0, 0, document.lineCount, 0),
+            new vscode.Range(0, 0, lastLine, lastChar),
             e.text
           );
           vscode.workspace.applyEdit(edit);

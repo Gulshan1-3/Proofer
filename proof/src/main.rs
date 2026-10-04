@@ -206,7 +206,7 @@ fn main() {
                     .ok()
                     .and_then(|p| p.parse().ok())
                     .unwrap_or(8086);
-                let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+                let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
                 let bind_addr = format!("{}:{}", host, port);
                 let listener = TcpListener::bind(&bind_addr).unwrap_or_else(|e| {
                     eprintln!("Failed to bind server to {}: {}", bind_addr, e);
@@ -215,6 +215,8 @@ fn main() {
                 println!("Proofer Verification Server listening on http://{}", bind_addr);
                 for stream in listener.incoming() {
                     if let Ok(s) = stream {
+                        let _ = s.set_read_timeout(Some(std::time::Duration::from_secs(5)));
+                        let _ = s.set_write_timeout(Some(std::time::Duration::from_secs(5)));
                         std::thread::spawn(|| handle_client(s));
                     }
                 }

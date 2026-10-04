@@ -260,17 +260,21 @@ export function simulateLocalVerification(code: string): VerificationResponse {
     }
   }
 
-  const allValid = hasTheorem && hasProof && hasEnd && hasSuppose && hasTherefore && steps.every(s => s.status === 'Valid');
+  // Security: A heuristic simulation must never certify a theorem as "Verified"
+  // without the trusted Rust kernel or WebAssembly engine having verified it.
+  const isHeuristicallyComplete = hasTheorem && hasProof && hasEnd && hasSuppose && hasTherefore && steps.every(s => s.status === 'Valid');
 
   return {
     status: 'Ok',
-    verified: allValid,
+    verified: false,
     theorems: [
       {
         name: thmName,
-        status: allValid ? 'Verified' : 'Rejected',
+        status: 'Rejected',
         proven: thmProven || conclusion,
-        errors: allValid ? [] : ['Verification pending complete proof steps or matching rule'],
+        errors: isHeuristicallyComplete
+          ? ['Heuristic syntax complete. Kernel offline — please start proofer daemon or enable WASM for formal verification.']
+          : ['Verification pending complete proof steps or matching rule'],
         steps,
       },
     ],

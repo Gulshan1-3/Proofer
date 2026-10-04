@@ -4,9 +4,26 @@ use crate::elab::Elaborator;
 use crate::ast::{Item, ProofStepKind};
 use std::collections::HashMap;
 
-/// Helper to serialize a string for JSON
+/// Helper to serialize a string for JSON with RFC 8259 compliant escaping
 pub fn json_str(s: &str) -> String {
-    format!("\"{}\"", s.replace('\\', "\\\\").replace('\"', "\\\"").replace('\n', "\\n"))
+    let mut out = String::with_capacity(s.len() + 16);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                use std::fmt::Write;
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// Verification payload returned according to enterprise editor specification.

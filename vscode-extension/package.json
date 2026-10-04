@@ -139,6 +139,7 @@
         "proofer.executablePath": {
           "type": "string",
           "default": "",
+          "scope": "machine",
           "description": "Custom path to the proof CLI binary (defaults to finding local proof binary)."
         },
         "proofer.verifyOnChange": {

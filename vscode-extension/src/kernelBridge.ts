@@ -201,14 +201,16 @@ export class KernelBridge {
   }
 
   private findCliBinary(): string | null {
+    const isTrusted = vscode.workspace.isTrusted;
     const config = vscode.workspace.getConfiguration('proofer');
-    const customPath = config.get<string>('executablePath');
+    const inspect = config.inspect<string>('executablePath');
+    // Security: Only accept workspace-level executable override if the workspace is explicitly trusted
+    const customPath = isTrusted ? config.get<string>('executablePath') : inspect?.globalValue;
     if (customPath && fs.existsSync(customPath)) {
       return customPath;
     }
 
     // Security: Only search workspace folders if the workspace is explicitly trusted by the user
-    const isTrusted = vscode.workspace.isTrusted;
     if (isTrusted && vscode.workspace.workspaceFolders) {
       for (const folder of vscode.workspace.workspaceFolders) {
         const releasePath = path.join(folder.uri.fsPath, 'proof', 'target', 'release', 'proof');

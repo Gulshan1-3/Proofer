@@ -714,7 +714,7 @@ export class WorkstationWebviewPanel {
       const synthBtn = document.getElementById('synth-btn');
       if (synthBtn) {
         synthBtn.addEventListener('click', () => {
-          vscode.postMessage({ command: 'synthesizeStep' });
+          vscode.postMessage({ type: 'synthesizeStep' });
         });
       }
     }

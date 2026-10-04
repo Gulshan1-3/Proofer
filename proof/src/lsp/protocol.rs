@@ -29,6 +29,13 @@ pub fn read_message<R: BufRead>(reader: &mut R) -> Result<Option<String>> {
     }
 
     if let Some(len) = content_length {
+        const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024; // 16 MB
+        if len > MAX_FRAME_SIZE {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "LSP frame size exceeds maximum limit of 16MB",
+            ));
+        }
         let mut buffer = vec![0u8; len];
         reader.read_exact(&mut buffer)?;
         let s = String::from_utf8_lossy(&buffer).to_string();

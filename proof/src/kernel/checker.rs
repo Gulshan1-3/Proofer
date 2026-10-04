@@ -370,7 +370,13 @@ impl<'a> Checker<'a> {
                                 reason: format!("SAS requires 3 premises, got {}", premise_props.len()),
                             });
                         }
-                        Ok(conclusion)
+                        match &conclusion {
+                            KProp::Atom(rel, _) if rel == "congruent" => Ok(conclusion),
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "SAS conclusion must establish triangle congruence".into(),
+                            }),
+                        }
                     }
                     "CongruentTrianglesAngles" | "CPCTC" => {
                         // Premise: congruent(T1, T2) -> corresponding parts equal
@@ -380,7 +386,25 @@ impl<'a> Checker<'a> {
                                 reason: "CPCTC requires at least 1 congruence premise".into(),
                             });
                         }
-                        Ok(conclusion)
+                        match &conclusion {
+                            KProp::Eq(a, b) => {
+                                let as_str = a.to_string();
+                                let bs_str = b.to_string();
+                                if !as_str.chars().all(|c| c.is_ascii_digit()) && !bs_str.chars().all(|c| c.is_ascii_digit()) {
+                                    Ok(conclusion)
+                                } else {
+                                    Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "CPCTC conclusion must equate corresponding non-numeric geometric parts".into(),
+                                    })
+                                }
+                            }
+                            KProp::Atom(rel, _) if rel == "equal_angle" || rel == "equal_length" => Ok(conclusion),
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "CPCTC conclusion must equate corresponding geometric parts".into(),
+                            }),
+                        }
                     }
                     "EqTrans" | "Transitivity" => {
                         if premise_props.len() != 2 {
@@ -389,16 +413,54 @@ impl<'a> Checker<'a> {
                                 reason: format!("Transitivity requires 2 premises, got {}", premise_props.len()),
                             });
                         }
-                        Ok(conclusion)
+                        match (&premise_props[0], &premise_props[1], &conclusion) {
+                            (KProp::Eq(a1, b1), KProp::Eq(a2, b2), KProp::Eq(c1, c2)) => {
+                                let valid = (b1 == a2 && c1 == a1 && c2 == b2)
+                                    || (b1 == a2 && c1 == b2 && c2 == a1)
+                                    || (a1 == a2 && c1 == b1 && c2 == b2)
+                                    || (a1 == a2 && c1 == b2 && c2 == b1)
+                                    || (b1 == b2 && c1 == a1 && c2 == a2)
+                                    || (b1 == b2 && c1 == a2 && c2 == a1)
+                                    || (a1 == b2 && c1 == b1 && c2 == a2)
+                                    || (a1 == b2 && c1 == a2 && c2 == b1);
+                                if valid {
+                                    Ok(conclusion)
+                                } else {
+                                    Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "Premises do not transitively derive the conclusion".into(),
+                                    })
+                                }
+                            }
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "Transitivity premises and conclusion must all be equalities".into(),
+                            }),
+                        }
                     }
                     "EqSymm" | "Symmetry" => {
-                        if premise_props.is_empty() {
+                        if premise_props.len() != 1 {
                             return Err(CheckError::InvalidGeoCertificate {
                                 rule,
-                                reason: "Symmetry requires 1 premise".into(),
+                                reason: format!("Symmetry requires exactly 1 premise, got {}", premise_props.len()),
                             });
                         }
-                        Ok(conclusion)
+                        match (&premise_props[0], &conclusion) {
+                            (KProp::Eq(a, b), KProp::Eq(c, d)) => {
+                                if a == d && b == c {
+                                    Ok(conclusion)
+                                } else {
+                                    Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "Symmetry premise a=b must yield conclusion b=a".into(),
+                                    })
+                                }
+                            }
+                            _ => Err(CheckError::InvalidGeoCertificate {
+                                rule,
+                                reason: "Symmetry premise and conclusion must be equalities".into(),
+                            }),
+                        }
                     }
                     "ModusPonens" => {
                         let valid = match premise_props.as_slice() {
@@ -500,7 +562,18 @@ impl<'a> Checker<'a> {
                             });
                         }
                         match &conclusion {
-                            KProp::Eq(..) => Ok(conclusion),
+                            KProp::Eq(lhs, rhs) => {
+                                let l = lhs.to_string();
+                                let r = rhs.to_string();
+                                if (l.contains("angle") || l.starts_with('∠')) && (r == "180" || r.ends_with("deg") || r.ends_with("°") || r.contains("angle") || r.starts_with('∠')) {
+                                    Ok(conclusion)
+                                } else {
+                                    Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "CyclicQuad conclusion must equate angle sum to 180 or angle measures".into(),
+                                    })
+                                }
+                            }
                             _ => Err(CheckError::InvalidGeoCertificate {
                                 rule,
                                 reason: "CyclicQuad conclusion must be angle sum equality".into(),
@@ -514,8 +587,17 @@ impl<'a> Checker<'a> {
                                 reason: "ParallelogramOppSides requires at least 1 premise".into(),
                             });
                         }
+                        let is_side_eq = |p: &KProp| match p {
+                            KProp::Eq(a, b) => {
+                                let as_str = a.to_string();
+                                let bs_str = b.to_string();
+                                !as_str.chars().all(|c| c.is_ascii_digit()) && !bs_str.chars().all(|c| c.is_ascii_digit())
+                            }
+                            _ => false,
+                        };
                         match &conclusion {
-                            KProp::And(..) | KProp::Eq(..) => Ok(conclusion),
+                            KProp::Eq(..) if is_side_eq(&conclusion) => Ok(conclusion),
+                            KProp::And(l, r) if is_side_eq(l) && is_side_eq(r) => Ok(conclusion),
                             _ => Err(CheckError::InvalidGeoCertificate {
                                 rule,
                                 reason: "ParallelogramOppSides conclusion must be equality or conjunction of side equalities".into(),
@@ -531,7 +613,18 @@ impl<'a> Checker<'a> {
                         }
                         match &conclusion {
                             KProp::Atom(rel, _) if rel == "perpendicular" => Ok(conclusion),
-                            KProp::Eq(..) => Ok(conclusion),
+                            KProp::Eq(lhs, rhs) => {
+                                let l = lhs.to_string();
+                                let r = rhs.to_string();
+                                if (l.contains("angle") || l.starts_with('∠')) && (r == "90" || r.ends_with("deg") || r.ends_with("°")) {
+                                    Ok(conclusion)
+                                } else {
+                                    Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "Conclusion must establish perpendicular relation or 90 degree angle".into(),
+                                    })
+                                }
+                            }
                             _ => Err(CheckError::InvalidGeoCertificate {
                                 rule,
                                 reason: "Conclusion must establish perpendicular relation".into(),
@@ -547,7 +640,18 @@ impl<'a> Checker<'a> {
                         }
                         match &conclusion {
                             KProp::Atom(rel, _) if rel == "parallel" => Ok(conclusion),
-                            KProp::Eq(..) => Ok(conclusion),
+                            KProp::Eq(a, b) => {
+                                let as_str = a.to_string();
+                                let bs_str = b.to_string();
+                                if !as_str.chars().all(|c| c.is_ascii_digit()) && !bs_str.chars().all(|c| c.is_ascii_digit()) {
+                                    Ok(conclusion)
+                                } else {
+                                    Err(CheckError::InvalidGeoCertificate {
+                                        rule,
+                                        reason: "MidpointBisects conclusion must be non-numeric segment equality or parallel relation".into(),
+                                    })
+                                }
+                            }
                             _ => Err(CheckError::InvalidGeoCertificate {
                                 rule,
                                 reason: "MidpointBisects conclusion must be parallel relation or equality".into(),

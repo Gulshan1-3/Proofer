@@ -112,3 +112,71 @@ end
     assert!(res_json.contains("\"verified\": true") || res_json.contains("\"verified\":true"),
         "Kernel must verify valid identity theorem: {}", res_json);
 }
+
+#[test]
+fn test_adversarial_rejection_of_transitivity_with_arbitrary_conclusion() {
+    let malicious_code = r#"
+theorem fake_trans : A = B -> (B = C -> False)
+proof
+    suppose h1 : A = B
+    suppose h2 : B = C
+    derive h3 : False from h1, h2 using EqTrans
+    therefore False from h3
+end
+"#;
+    let res_json = process_proof_request(malicious_code);
+    assert!(res_json.contains("\"verified\": false") || res_json.contains("\"verified\":false"),
+        "Kernel must reject EqTrans deriving False: {}", res_json);
+}
+
+#[test]
+fn test_adversarial_rejection_of_symmetry_with_arbitrary_conclusion() {
+    let malicious_code = r#"
+theorem fake_symm : A = B -> False
+proof
+    suppose h1 : A = B
+    derive h2 : False from h1 using EqSymm
+    therefore False from h2
+end
+"#;
+    let res_json = process_proof_request(malicious_code);
+    assert!(res_json.contains("\"verified\": false") || res_json.contains("\"verified\":false"),
+        "Kernel must reject EqSymm deriving False: {}", res_json);
+}
+
+#[test]
+fn test_adversarial_rejection_of_cyclic_quad_proving_numeric_equality() {
+    let malicious_code = r#"
+theorem fake_cyclic : cyclic(ABCD) -> 0 = 1
+proof
+    suppose h1 : cyclic(ABCD)
+    derive h2 : 0 = 1 from h1 using CyclicQuad
+    therefore 0 = 1 from h2
+end
+"#;
+    let res_json = process_proof_request(malicious_code);
+    assert!(res_json.contains("\"verified\": false") || res_json.contains("\"verified\":false"),
+        "Kernel must reject CyclicQuad deriving 0 = 1: {}", res_json);
+}
+
+#[test]
+fn test_lsp_content_length_oversized_rejection() {
+    let payload = "Content-Length: 50000000\r\n\r\n";
+    let mut cursor = std::io::Cursor::new(payload.as_bytes());
+    let res = proof::lsp::protocol::read_message(&mut cursor);
+    assert!(res.is_err(), "LSP protocol reader must reject frames larger than 16MB");
+}
+
+#[test]
+fn test_json_str_escapes_all_control_characters() {
+    let input = "line1\nline2\rline3\ttab\0null\x1funit";
+    let json = proof::api::json_str(input);
+    assert!(json.starts_with('"') && json.ends_with('"'));
+    assert!(!json.contains('\n'));
+    assert!(!json.contains('\r'));
+    assert!(!json.contains('\t'));
+    assert!(!json.contains('\0'));
+    assert!(json.contains("\\u0000"));
+    assert!(json.contains("\\u001f"));
+}
+

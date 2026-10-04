@@ -239,7 +239,8 @@ end
             for entry in fs::read_dir(dir)? {
                 let entry = entry?;
                 let path = entry.path();
-                if path.is_dir() {
+                // Defense-in-depth: Never traverse directory symlinks to avoid circular recursion loops
+                if path.is_dir() && !path.is_symlink() {
                     let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                     if dir_name != "target" && dir_name != "node_modules" && !dir_name.starts_with('.') {
                         Self::collect_proof_files(&path, list)?;

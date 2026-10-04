@@ -550,24 +550,26 @@ export class WorkstationWebviewPanel {
         const arcB = createArcPath(points.B, points.A, points.C, 22);
 
         html = \`
-          <!-- Circumcircle -->
-          <circle cx="\${oX}" cy="\${oY}" r="\${radius}" fill="rgba(56, 189, 248, 0.03)" stroke="#2d3b55" stroke-width="1.5" stroke-dasharray="5 4" />
-          <path d="M \${points.A.x} \${points.A.y} A \${radius} \${radius} 0 0 1 \${points.B.x} \${points.B.y}" fill="none" stroke="#38bdf8" stroke-width="2" />
+          <!-- Circumcircle - Luminous Warm Amber -->
+          <circle cx="\${oX}" cy="\${oY}" r="\${radius}" fill="rgba(245, 158, 11, 0.035)" stroke="#f59e0b" stroke-width="1.8" />
           
-          <!-- Diameter AB -->
-          <line x1="\${points.A.x}" y1="\${points.A.y}" x2="\${points.B.x}" y2="\${points.B.y}" stroke="#475569" stroke-width="1.8" />
+          <!-- Inscribed Triangle ABC Fill -->
+          <polygon points="\${points.A.x},\${points.A.y} \${points.C.x},\${points.C.y} \${points.B.x},\${points.B.y}" fill="rgba(56, 189, 248, 0.06)" />
+
+          <!-- Diameter AB - Slate Silver Baseline -->
+          <line x1="\${points.A.x}" y1="\${points.A.y}" x2="\${points.B.x}" y2="\${points.B.y}" stroke="#94a3b8" stroke-width="1.8" />
           
-          <!-- Chords AC and BC -->
-          <line x1="\${points.A.x}" y1="\${points.A.y}" x2="\${points.C.x}" y2="\${points.C.y}" stroke="#79c0ff" stroke-width="2" />
-          <line x1="\${points.B.x}" y1="\${points.B.y}" x2="\${points.C.x}" y2="\${points.C.y}" stroke="#79c0ff" stroke-width="2" />
+          <!-- Inscribed Chords AC and BC - Cool Sky Blue -->
+          <line x1="\${points.A.x}" y1="\${points.A.y}" x2="\${points.C.x}" y2="\${points.C.y}" stroke="#38bdf8" stroke-width="2" />
+          <line x1="\${points.B.x}" y1="\${points.B.y}" x2="\${points.C.x}" y2="\${points.C.y}" stroke="#38bdf8" stroke-width="2" />
           
           <!-- Inscribed Right Angle Square at C -->
-          <polyline points="\${thalesSq}" fill="rgba(56, 189, 248, 0.15)" stroke="#38bdf8" stroke-width="1.8" />
+          <polyline points="\${thalesSq}" fill="rgba(56, 189, 248, 0.18)" stroke="#38bdf8" stroke-width="1.8" />
           
           <!-- 90° Badge at C -->
           <g transform="translate(\${points.C.x}, \${points.C.y - 18})">
             <rect x="-18" y="-12" width="36" height="15" rx="3" fill="#0d1117" stroke="#38bdf8" stroke-width="1" />
-            <text x="0" y="-1" fill="#38bdf8" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">90°</text>
+            <text x="0" y="-1" fill="#38bdf8" font-size="10" font-family="Inter, sans-serif" font-weight="700" text-anchor="middle">90°</text>
           </g>
 
           <!-- Angle Arcs at A and B -->
@@ -578,8 +580,8 @@ export class WorkstationWebviewPanel {
           <text x="\${arcB.labelPos.x}" y="\${arcB.labelPos.y}" fill="#94a3b8" font-size="9" font-family="monospace" text-anchor="middle">\${arcB.deg}°</text>
 
           <!-- Center O -->
-          <circle cx="\${oX}" cy="\${oY}" r="3" fill="#64748b" />
-          <text x="\${oX}" y="\${oY + 14}" fill="#64748b" font-size="10" font-family="monospace" text-anchor="middle">O</text>
+          <circle cx="\${oX}" cy="\${oY}" r="3.5" fill="#f59e0b" stroke="#0a0e17" stroke-width="1" />
+          <text x="\${oX}" y="\${oY + 14}" fill="#fbbf24" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">O</text>
         \`;
       } else if (isTriangle) {
         const midBC = { x: (points.B.x + points.C.x) / 2, y: (points.B.y + points.C.y) / 2 };

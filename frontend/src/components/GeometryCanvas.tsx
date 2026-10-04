@@ -302,60 +302,72 @@ export const GeometryCanvas: React.FC<GeometryCanvasProps> = ({
           {/* ===================== CIRCLE / THALES SCENE ===================== */}
           {isCircleFigure ? (
             <g className="circle-scene">
-              {/* Circumcircle */}
+              {/* Circumcircle - Luminous Warm Amber with balanced optical weight */}
               <circle
                 cx={circleCenter.x}
                 cy={circleCenter.y}
                 r={circleRadius}
-                fill="rgba(56, 189, 248, 0.03)"
-                stroke={isEntityActive('circle') || isEntityActive('diameter') ? '#58a6ff' : '#2d3b55'}
-                strokeWidth={isEntityActive('circle') ? '2.5' : '1.5'}
-                strokeDasharray="5 4"
+                fill={isEntityActive('circle') ? 'rgba(245, 158, 11, 0.08)' : 'rgba(245, 158, 11, 0.035)'}
+                stroke={isEntityActive('circle') ? '#fde047' : '#f59e0b'}
+                strokeWidth={isEntityActive('circle') ? '2.5' : '1.8'}
+                onClick={(e) => { e.stopPropagation(); handleEntityClick('circle'); }}
+                style={{ cursor: 'pointer' }}
               />
 
-              {/* Diameter AB */}
+              {/* Inscribed Triangle ABC Fill */}
+              <polygon
+                points={`${ptA.x},${ptA.y} ${ptC.x},${ptC.y} ${ptB.x},${ptB.y}`}
+                fill="rgba(56, 189, 248, 0.06)"
+                stroke="none"
+              />
+
+              {/* Diameter AB - Slate Silver Baseline */}
               <line
                 x1={ptA.x}
                 y1={ptA.y}
                 x2={ptB.x}
                 y2={ptB.y}
-                stroke={isEntityActive('AB') ? '#388bfd' : '#e6edf3'}
-                strokeWidth={isEntityActive('AB') ? '3' : '2'}
+                stroke={isEntityActive('AB') || isEntityActive('diameter') ? '#388bfd' : '#94a3b8'}
+                strokeWidth={isEntityActive('AB') || isEntityActive('diameter') ? '2.8' : '1.8'}
                 onClick={(e) => { e.stopPropagation(); handleEntityClick('AB'); }}
+                style={{ cursor: 'pointer' }}
               />
 
-              {/* Inscribed Chords AC, BC */}
+              {/* Inscribed Chords AC, BC - Cool Sky Blue */}
               <line
                 x1={ptA.x}
                 y1={ptA.y}
                 x2={ptC.x}
                 y2={ptC.y}
-                stroke={isEntityActive('AC') ? '#388bfd' : '#79c0ff'}
+                stroke={isEntityActive('AC') ? '#388bfd' : '#38bdf8'}
                 strokeWidth={isEntityActive('AC') ? '3' : '2'}
                 onClick={(e) => { e.stopPropagation(); handleEntityClick('AC'); }}
+                style={{ cursor: 'pointer' }}
               />
               <line
                 x1={ptB.x}
                 y1={ptB.y}
                 x2={ptC.x}
                 y2={ptC.y}
-                stroke={isEntityActive('BC') ? '#388bfd' : '#79c0ff'}
+                stroke={isEntityActive('BC') ? '#388bfd' : '#38bdf8'}
                 strokeWidth={isEntityActive('BC') ? '3' : '2'}
                 onClick={(e) => { e.stopPropagation(); handleEntityClick('BC'); }}
+                style={{ cursor: 'pointer' }}
               />
 
               {/* Inscribed 90° Right Angle Marker at C */}
               <polyline
                 points={thalesRightAngle.pointsString}
-                fill="rgba(56, 189, 248, 0.15)"
+                fill="rgba(56, 189, 248, 0.18)"
                 stroke="#38bdf8"
                 strokeWidth="1.8"
                 onClick={(e) => { e.stopPropagation(); handleEntityClick('angle_ACB'); }}
+                style={{ cursor: 'pointer' }}
               />
 
               {/* Center point O */}
-              <circle cx={circleCenter.x} cy={circleCenter.y} r="3" fill="#64748b" />
-              <text x={circleCenter.x} y={circleCenter.y + 14} fill="#64748b" fontSize="10" fontFamily="monospace" textAnchor="middle">O</text>
+              <circle cx={circleCenter.x} cy={circleCenter.y} r="3.5" fill="#f59e0b" stroke="#0a0e17" strokeWidth="1" />
+              <text x={circleCenter.x} y={circleCenter.y + 14} fill="#fbbf24" fontSize="10" fontFamily="monospace" textAnchor="middle" fontWeight="bold">O</text>
 
               {/* Live 90° Badge at C */}
               <g transform={`translate(${ptC.x}, ${ptC.y - 18})`}>

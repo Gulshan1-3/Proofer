@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cpu, Folder, GitBranch, Eye, EyeOff, Search, FileCode } from 'lucide-react';
+import { Cpu, Folder, GitBranch, Eye, EyeOff, Search, FileCode, BookOpen } from 'lucide-react';
 import { VerificationResponse } from '../types';
 
 interface HeaderProps {
@@ -16,6 +16,7 @@ interface HeaderProps {
   showCanvas: boolean;
   onToggleCanvas: () => void;
   onOpenCommandPalette: () => void;
+  onBackToWebsite?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -32,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   showCanvas,
   onToggleCanvas,
   onOpenCommandPalette,
+  onBackToWebsite,
 }) => {
   const isVerified = verification?.verified ?? false;
 
@@ -39,7 +41,12 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="workstation-header">
       {/* Brand & Desktop Menu Bar */}
       <div className="header-left">
-        <div className="brand-lockup">
+        <div 
+          className="brand-lockup" 
+          onClick={onBackToWebsite} 
+          style={{ cursor: onBackToWebsite ? 'pointer' : 'default' }}
+          title={onBackToWebsite ? "Go to Website & Docs" : "Proofer"}
+        >
           <svg className="brand-logo" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e6edf3" strokeWidth="2.5">
             <polygon points="12 2 2 22 22 22 12 2" />
           </svg>
@@ -49,6 +56,13 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Workstation Menus */}
         <nav className="header-menu-nav">
+          {onBackToWebsite && (
+            <button className="menu-nav-btn" onClick={onBackToWebsite} title="Return to Website & Documentation">
+              <BookOpen size={13} />
+              <span>Website &amp; Docs</span>
+            </button>
+          )}
+
           <button className={`menu-nav-btn ${isFilesOpen ? 'active' : ''}`} onClick={onToggleFiles}>
             <Folder size={13} />
             <span>Files ({filesCount})</span>

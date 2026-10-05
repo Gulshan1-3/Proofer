@@ -14,6 +14,12 @@ import { loadWorkspace, saveWorkspace, createCommit } from './services/storage';
 import { parseProofCodeToSteps } from './services/stepMapper';
 import { VerificationResponse, VisualPoint, ProjectFile, FileCommit } from './types';
 import { FileCode, Play, Eye, RotateCcw, Folder, GitBranch, Binary, Sparkles } from 'lucide-react';
+import { Navbar, WebsiteView } from './components/website/Navbar';
+import { LandingPage } from './components/website/LandingPage';
+import { DocsPortal } from './components/website/DocsPortal';
+import { ShowcasePage } from './components/website/ShowcasePage';
+import { InstallPage } from './components/website/InstallPage';
+import { Footer } from './components/website/Footer';
 
 const TEMPLATES: Record<string, string> = {
   isosceles: `theorem isosceles_base_angles:
@@ -211,6 +217,53 @@ export const App: React.FC = () => {
 
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
   const [code, setCode] = useState<string>(activeFile?.content || TEMPLATES.isosceles);
+
+  // Website routing state (Lean-style multi-page portal)
+  const parseHashToView = (): { view: WebsiteView; docId?: string } => {
+    const rawHash = typeof window !== 'undefined' ? window.location.hash.replace(/^#\/?/, '') : '';
+    if (!rawHash || rawHash === 'home' || rawHash === 'landing') return { view: 'landing' };
+    if (rawHash === 'playground' || rawHash === 'workstation') return { view: 'playground' };
+    if (rawHash === 'showcase') return { view: 'showcase' };
+    if (rawHash === 'install') return { view: 'install' };
+    if (rawHash.startsWith('docs')) {
+      const parts = rawHash.split('/');
+      return { view: 'docs', docId: parts[1] || 'intro-philosophy' };
+    }
+    return { view: 'landing' };
+  };
+
+  const [websiteView, setWebsiteView] = useState<WebsiteView>(() => parseHashToView().view);
+  const [activeDocSectionId, setActiveDocSectionId] = useState<string>(() => parseHashToView().docId || 'intro-philosophy');
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const parsed = parseHashToView();
+      setWebsiteView(parsed.view);
+      if (parsed.docId) {
+        setActiveDocSectionId(parsed.docId);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const handleNavigate = (view: WebsiteView, docSectionId?: string) => {
+    setWebsiteView(view);
+    if (docSectionId) {
+      setActiveDocSectionId(docSectionId);
+      window.location.hash = `#docs/${docSectionId}`;
+    } else if (view === 'landing') {
+      window.location.hash = '#home';
+    } else {
+      window.location.hash = `#${view}`;
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSelectDocSection = (id: string) => {
+    setActiveDocSectionId(id);
+    window.location.hash = `#docs/${id}`;
+  };
 
   // Drawer & Modal toggles
   const [isFilesOpen, setIsFilesOpen] = useState<boolean>(false);
@@ -419,6 +472,32 @@ export const App: React.FC = () => {
       } else {
         updateGeometryFromParameters(apexAngle, sideLength);
       }
+    }
+  };
+
+  const handleLoadExampleToPlayground = (exampleCode: string, isGeo: boolean = true) => {
+    setCode(exampleCode);
+    setSelectedStepId(null);
+    setCanvasOverride(isGeo ? 'visible' : 'auto');
+    setWebsiteView('playground');
+    window.location.hash = '#playground';
+
+    if (exampleCode.includes('diameter(AB)')) {
+      setPoints([
+        { id: 'pt#4', name: 'A', x: 160, y: 250 },
+        { id: 'pt#5', name: 'B', x: 440, y: 250 },
+        { id: 'pt#6', name: 'C', x: 252, y: 118 },
+        { id: 'pt#7', name: 'D', x: 430, y: 180 },
+      ]);
+    } else if (exampleCode.includes('cyclic(') || exampleCode.includes('parallelogram(')) {
+      setPoints([
+        { id: 'pt#4', name: 'A', x: 200, y: 160 },
+        { id: 'pt#5', name: 'B', x: 170, y: 340 },
+        { id: 'pt#6', name: 'C', x: 400, y: 360 },
+        { id: 'pt#7', name: 'D', x: 430, y: 180 },
+      ]);
+    } else if (isGeo) {
+      updateGeometryFromParameters(apexAngle, sideLength);
     }
   };
 
@@ -663,6 +742,44 @@ export const App: React.FC = () => {
     },
   ];
 
+  if (websiteView !== 'playground') {
+    return (
+      <div className="website-wrapper">
+        <Navbar 
+          activeView={websiteView} 
+          onNavigate={handleNavigate} 
+          daemonOnline={daemonOnline} 
+        />
+        {websiteView === 'landing' && (
+          <LandingPage 
+            onNavigate={handleNavigate} 
+            onLoadExampleToPlayground={handleLoadExampleToPlayground} 
+          />
+        )}
+        {websiteView === 'docs' && (
+          <DocsPortal 
+            activeSectionId={activeDocSectionId} 
+            onSelectSection={handleSelectDocSection} 
+            onNavigate={handleNavigate} 
+            onLoadExampleToPlayground={handleLoadExampleToPlayground} 
+          />
+        )}
+        {websiteView === 'showcase' && (
+          <ShowcasePage 
+            onNavigate={handleNavigate} 
+            onLoadExampleToPlayground={handleLoadExampleToPlayground} 
+          />
+        )}
+        {websiteView === 'install' && (
+          <InstallPage 
+            onNavigate={handleNavigate} 
+          />
+        )}
+        <Footer onNavigate={handleNavigate} />
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       <Header
@@ -679,6 +796,7 @@ export const App: React.FC = () => {
         showCanvas={showCanvas}
         onToggleCanvas={handleToggleCanvas}
         onOpenCommandPalette={() => setIsPaletteOpen(true)}
+        onBackToWebsite={() => handleNavigate('landing')}
       />
 
       <ConstructionToolbar

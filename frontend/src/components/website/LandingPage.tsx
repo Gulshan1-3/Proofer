@@ -160,31 +160,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </button>
               <button className="cta-tertiary" onClick={() => onNavigate('install')}>
                 <Download size={16} />
-                <span>Install VS Code Extension</span>
+                <span>Install CLI &amp; VS Code</span>
               </button>
-            </div>
-
-            {/* Micro-metrics */}
-            <div className="hero-metrics">
-              <div className="metric-item">
-                <span className="metric-number">&lt; 10 µs</span>
-                <span className="metric-label">Kernel Check Latency</span>
-              </div>
-              <div className="metric-divider"></div>
-              <div className="metric-item">
-                <span className="metric-number">100%</span>
-                <span className="metric-label">Deterministic LCF Core</span>
-              </div>
-              <div className="metric-divider"></div>
-              <div className="metric-item">
-                <span className="metric-number">0</span>
-                <span className="metric-label">AI Hallucinations</span>
-              </div>
-              <div className="metric-divider"></div>
-              <div className="metric-item">
-                <span className="metric-number">3-Pane</span>
-                <span className="metric-label">Synced CAD Studio</span>
-              </div>
             </div>
           </div>
 
@@ -318,6 +295,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <ArrowRight size={14} />
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* Verification & Performance Benchmark Strip */}
+          <div className="hero-metrics">
+            <div className="metric-item">
+              <span className="metric-number">&lt; 10 µs</span>
+              <span className="metric-label">Kernel Check Latency</span>
+            </div>
+            <div className="metric-divider"></div>
+            <div className="metric-item">
+              <span className="metric-number">100%</span>
+              <span className="metric-label">Deterministic LCF Core</span>
+            </div>
+            <div className="metric-divider"></div>
+            <div className="metric-item">
+              <span className="metric-number">0</span>
+              <span className="metric-label">AI Hallucinations</span>
+            </div>
+            <div className="metric-divider"></div>
+            <div className="metric-item">
+              <span className="metric-number">3-Pane</span>
+              <span className="metric-label">Synced CAD Studio</span>
             </div>
           </div>
         </div>

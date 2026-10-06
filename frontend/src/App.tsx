@@ -242,10 +242,21 @@ export const App: React.FC = () => {
       if (parsed.docId) {
         setActiveDocSectionId(parsed.docId);
       }
+      window.scrollTo(0, 0);
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  useEffect(() => {
+    if (websiteView === 'playground') {
+      document.body.classList.add('workstation-active');
+      document.body.classList.remove('website-active');
+    } else {
+      document.body.classList.remove('workstation-active');
+      document.body.classList.add('website-active');
+    }
+  }, [websiteView]);
 
   const handleNavigate = (view: WebsiteView, docSectionId?: string) => {
     setWebsiteView(view);
@@ -263,6 +274,7 @@ export const App: React.FC = () => {
   const handleSelectDocSection = (id: string) => {
     setActiveDocSectionId(id);
     window.location.hash = `#docs/${id}`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Drawer & Modal toggles
